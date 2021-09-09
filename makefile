@@ -15,10 +15,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
 
-# "configure" shell script, to be automatically executed by R's package installation
-# function. Only serves the purpose of raising an error if external dependencies
-# are not satisfied. Notifies the user of the failing dependency.
-
 install: 
 	cp src/*sh src*/R $USER/.local/bin/
 
