@@ -33,7 +33,7 @@ extractParamSection() {
   mkdir -p tmp
   case "$SECTION" in
     ARGUMENTS) TMPFILE=$(mktemp -p tmp/);;
-    SEQUENCES) TMPFILE=$(mktemp -p tmp/ --suffix=.fasta);;
+    *SEQUENCE*) TMPFILE=$(mktemp -p tmp/ --suffix=.fasta);;
     SAMPLE) TMPFILE=$(mktemp -p tmp/ --suffix=.tsv);;
     *) echo "Unrecognized section selected!"&&exit 2;;
   esac
@@ -44,8 +44,9 @@ extractParamSection() {
 
 #Load parameters
 source $(extractParamSection $PARAMETERS ARGUMENTS)
-FLANKING=$(extractParamSection $PARAMETERS SEQUENCES)
+FLANKING=$(extractParamSection $PARAMETERS 'FLANKING SEQUENCES')
 SAMPLES=$(extractParamSection $PARAMETERS SAMPLE)
+CDS=$(extractParamSection $PARAMETERS 'CODING SEQUENCE')
 
 #set the correct argument for reverse complement
 if [[ REVCOMP == 1 ]]; then
