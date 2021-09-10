@@ -22,8 +22,8 @@ library(yogitools)
 library(argparser)
 
 p <- arg_parser(
-	"consolidate barseq counts",
-	name="barseq_consolidator.R"
+  "consolidate barseq counts",
+  name="barseq_consolidator.R"
 )
 p <- add_argument(p, "indir", help="input directory")
 p <- add_argument(p, "samples", help="sample table file")
@@ -37,48 +37,48 @@ samples <- read.delim(pargs$samples)
 
 #re-order files based on sample sheet
 countFiles <- sapply(samples$sample, function(sid) {
-	hits <- grep(sid,countFiles)
-	if (length(hits)==1) {
-		return(paste0(pargs$indir,"/",countFiles[[hits]]))
-	} else {
-		stop("No unambiguous file match for ",sid)
-	}
+  hits <- grep(sid,countFiles)
+  if (length(hits)==1) {
+    return(paste0(pargs$indir,"/",countFiles[[hits]]))
+  } else {
+    stop("No unambiguous file match for ",sid)
+  }
 })
 
 # samples <- as.data.frame(
-# 	yogitools::extract.groups(countFiles,"([^-]+)-([^-]+)-Rep(\\d+)")
+#   yogitools::extract.groups(countFiles,"([^-]+)-([^-]+)-Rep(\\d+)")
 # )
 # colnames(samples) <- c("Experiment","Condition","Replicate")
 
 # samplenames <- with(samples,{
-# 	sprintf("%s.%s.rep%s",Experiment,Condition,Replicate)
+#   sprintf("%s.%s.rep%s",Experiment,Condition,Replicate)
 # })
 
 # bcFile <- "pDEST_pool3_subassembly_bc1_varcalls_transl.csv"
 barcodes <- read.csv(pargs$library)
 
 countData <- do.call(data.frame,lapply(countFiles, function(countsFile) {
-	counts <- yogitools::as.df(strsplit(trimws(readLines(countsFile))," +"))
-	counts <- counts[counts[,2]!="hits",]
-	counts[,1] <- as.integer(counts[,1])
-	counts[,2] <- as.integer(counts[,2])
+  counts <- yogitools::as.df(strsplit(trimws(readLines(countsFile))," +"))
+  counts <- counts[counts[,2]!="hits",]
+  counts[,1] <- as.integer(counts[,1])
+  counts[,2] <- as.integer(counts[,2])
 
-	usefulCounts <- na.omit(counts)
-	countVec <- integer(nrow(barcodes))
-	countVec[usefulCounts[,2]] <- usefulCounts[,1]
-	return(countVec)
+  usefulCounts <- na.omit(counts)
+  countVec <- integer(nrow(barcodes))
+  countVec[usefulCounts[,2]] <- usefulCounts[,1]
+  return(countVec)
 }))
 colnames(countData) <- samples$sample
 
 noMatch <- yogitools::as.df(lapply(countFiles, function(countsFile) {
-	counts <- yogitools::as.df(strsplit(trimws(readLines(countsFile))," +"))
-	nom <- as.integer(counts[counts[,2]=="NA",1])
-	totReads <- as.integer(sum(as.integer(counts[,1],na.rm=TRUE)))
-	list(
-		noMatch=nom,
-		totalReads=totReads,
-		frac=nom/totReads
-	)
+  counts <- yogitools::as.df(strsplit(trimws(readLines(countsFile))," +"))
+  nom <- as.integer(counts[counts[,2]=="NA",1])
+  totReads <- as.integer(sum(as.integer(counts[,1],na.rm=TRUE)))
+  list(
+    noMatch=nom,
+    totalReads=totReads,
+    frac=nom/totReads
+  )
 }))
 rownames(noMatch) <- samples$sample
 write.csv(noMatch,paste0(pargs$indir,"/noMatch.csv"))

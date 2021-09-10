@@ -18,13 +18,67 @@
 
 #This script depends on submitjob.sh and waitForJobs.sh !
 
+#helper function to print usage information
+usage () {
+  cat << EOF
+
+barseq.sh v0.0.1 
+
+by Jochen Weile <jochenweile@gmail.com> 2021
+
+Processes BarSeq data ona SLURM HPC cluster.
+Usage: pacbioCCS.sh <INDIR> <PARAMS>
+
+<INDIR>     : The input directory containing the fastq.gz files
+<PARAMS>    : A barseq parameter sheet file
+
+EOF
+ exit $1
+}
+
+#Parse Arguments
+PARAMS=""
+while (( "$#" )); do
+  case "$1" in
+    -h|--help)
+      usage 0
+      shift
+      ;;
+    --) # end of options indicates that the main command follows
+      shift
+      PARAMS="$PARAMS $@"
+      eval set -- ""
+      ;;
+    -*|--*=) # unsupported flags
+      echo "ERROR: Unsupported flag $1" >&2
+      usage 1
+      ;;
+    *) # positional parameter
+      PARAMS="$PARAMS $1"
+      shift
+      ;;
+  esac
+done
+#reset command arguments as only positional parameters
+eval set -- "$PARAMS"
+
 #folder containing barseq fastq files
-INPUTFOLDER=$1
+INPUTFOLDER="$1"
+if [[ -z "$INPUTFOLDER" ]]; then
+  echo "No INDIR provided!"
+elif ! [[ -d "$INPUTFOLDER" ]]; then
+  echo "$INPUTFOLDER is not a valid directory!">&2
+  exit 1
+fi
 #parameter file
 PARAMETERS=${2:-parameters.txt}
+if ! [[ -r "$PARAMETERS" ]]; then
+  echo "$PARAMETERS not found or unreadable!">&2
+  exit 1
+fi
 
 #blacklist of nodes with broken R installations
-BLACKLIST=galen1,galen2,galen4,galen5,galen10,galen24,galen25,galen27,galen31,galen35,galen40,galen41,galen43,galen54,galen57,galen58,galen59,galen60,galen61,galen62,galen63,galen64,galen65
+# BLACKLIST=galen1,galen2,galen4,galen5,galen10,galen24,galen25,galen27,galen31,galen35,galen40,galen41,galen43,galen54,galen57,galen58,galen59,galen60,galen61,galen62,galen63,galen64,galen65
 
 #helper function to extract relevant sections from a parameter file
 extractParamSection() {
@@ -85,7 +139,7 @@ for INPUTFQ in $(ls $INPUTFOLDER/*fastq.gz); do
     TAG=barseq$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
     #start barseq.R job and capture the job-id number
     RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log -t 24:00:00 \
-      --blacklist $BLACKLIST \
+      # --blacklist $BLACKLIST \
       barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
       --maxErr $BCMAXERR $CHUNK $LIBRARY)
     JOBID=${RETVAL##* }

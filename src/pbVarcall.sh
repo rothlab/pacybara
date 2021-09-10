@@ -16,22 +16,103 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
 
+NCHUNKS=1000
+
+#helper function to print usage information
+usage () {
+  cat << EOF
+
+pbVarcall.sh v0.0.1 
+
+by Jochen Weile <jochenweile@gmail.com> 2021
+
+Runs parallel variant calling on Pacbio consensus sequences using needle  
+SLURM HPC cluster.
+Usage: pacbioCCS.sh [-c|--chunks <CHUNKS>] <INFILE> <REFERENCE>
+
+-c|--chunks  : The number of chunks to process in parallel.
+               Defaults to $NCHUNKS .
+<INFILE>     : The compressed, tab-delimited .txt.gz file 
+               containing Pacbio sequences
+<REFERENCE>  : A FASTA file containing the reference CDS sequence
+
+EOF
+ exit $1
+}
+
+#Parse Arguments
+PARAMS=""
+while (( "$#" )); do
+  case "$1" in
+    -h|--help)
+      usage 0
+      shift
+      ;;
+    -c|--chunks)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        NCHUNKS=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    --) # end of options indicates that the main command follows
+      shift
+      PARAMS="$PARAMS $@"
+      eval set -- ""
+      ;;
+    -*|--*=) # unsupported flags
+      echo "ERROR: Unsupported flag $1" >&2
+      usage 1
+      ;;
+    *) # positional parameter
+      PARAMS="$PARAMS $1"
+      shift
+      ;;
+  esac
+done
+#reset command arguments as only positional parameters
+eval set -- "$PARAMS"
+
 INFILE=$1
+if [ -z "$INFILE" ]; then
+  echo "No INFILE provided!">&2
+  usage 1
+elif [[ "$INFILE" != *.txt.gz ]] || ! [[ $(file "$INFILE") =~ "gzip compressed data" ]]; then
+  echo "$INFILE is not a gzip-compressed text file!">&2
+  exit 1
+fi
+
 # REFSEQ="LPL_cds.fa"
 REFSEQ=$2
+if [ -z "$REFSEQ" ]; then
+  echo "No REFERENCE FASTA provided!">&2
+  usage 1
+elif [[ "$REFSEQ" != *.fasta ]] && [[ "!REFSEQ" != *.fa ]]; then
+  echo "$REFSEQ must be a FASTA file!"
+  exit 1
+fi
+
+#set outfile based on infile
 OUTFILE=$(echo "$INFILE"|sed -r "s/\\.txt.gz$/_varcalls.txt/")
 
+#split file into chunks and process using worker scripts
 mkdir -p chunks
-zcat "$INFILE"|split -l 1000 - chunks/chunk
+zcat "$INFILE"|split -l $NCHUNKS - chunks/chunk
 for CHUNK in $(ls chunks/*); do
     ID=$(basename $CHUNK)
-    submitjob.sh -t 00:30:00 -n "$ID" -- ./pbVarcall_worker.sh "$CHUNK" "$REFSEQ"
+    submitjob.sh -t "00:30:00" -n "$ID" -- ./pbVarcall_worker.sh "$CHUNK" "$REFSEQ"
 done
 
 waitForJobs.sh
 
+#consolidate outputs
 cat chunks/*_varcall.txt>$OUTFILE&&rm chunks/*
 
+#translate variant calls to amino acid level
 submitjob.sh -t 00:30:00 -n translate -- pbVarcall_translate.R $OUTFILE parameters.json
 
 waitForJobs.sh
+
+echo "Done!"

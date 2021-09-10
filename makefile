@@ -16,5 +16,5 @@
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
 
 install: 
-	cp src/*sh src*/R $USER/.local/bin/
+  cp src/*sh src*/R $USER/.local/bin/
 
