@@ -138,8 +138,8 @@ for INPUTFQ in $(ls $INPUTFOLDER/*fastq.gz); do
   for CHUNK in $CHUNKS; do
     TAG=barseq$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
     #start barseq.R job and capture the job-id number
-    RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log -t 24:00:00 \
       # --blacklist $BLACKLIST \
+    RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log -t 24:00:00 \
       barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
       --maxErr $BCMAXERR $CHUNK $LIBRARY)
     JOBID=${RETVAL##* }
