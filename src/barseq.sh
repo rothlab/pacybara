@@ -27,7 +27,7 @@ barseq.sh v0.0.1
 by Jochen Weile <jochenweile@gmail.com> 2021
 
 Processes BarSeq data ona SLURM HPC cluster.
-Usage: pacbioCCS.sh <INDIR> <PARAMS>
+Usage: barseq.sh <INDIR> <PARAMS>
 
 <INDIR>     : The input directory containing the fastq.gz files
 <PARAMS>    : A barseq parameter sheet file
@@ -103,7 +103,7 @@ SAMPLES=$(extractParamSection $PARAMETERS SAMPLE)
 CDS=$(extractParamSection $PARAMETERS 'CODING SEQUENCE')
 
 #set the correct argument for reverse complement
-if [[ REVCOMP == 1 ]]; then
+if [[ $REVCOMP == 1 ]]; then
   RCARG="--rc"
 else
   RCARG=""

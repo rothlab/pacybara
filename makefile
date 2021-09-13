@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
 
+PREFIX := ${HOME}/bin/
+
 install: 
-  cp src/*sh src*/R $USER/.local/bin/
+  cp src/*sh src/*R ${PREFIX}
 
