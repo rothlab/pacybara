@@ -170,7 +170,8 @@ for INPUTFQ in $(ls $INPUTFOLDER/*fastq.gz); do
 
   #clean up 
   rm $CHUNKS $RESULTS
-  rm ${WORKSPACE}logs/*
+  tar czf ${WORKSPACE}logs/countLogs.tgz ${WORKSPACE}logs/*log
+  rm ${WORKSPACE}logs/*log
 
 done
 
@@ -180,4 +181,4 @@ barseq_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
 barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}scores/"
 
 #cleanup temp files
-rm tmp/*
+rm tmp/*&&rmdir tmp
