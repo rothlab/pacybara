@@ -75,7 +75,7 @@ done
 #reset command arguments as only positional parameters
 eval set -- "$PARAMS"
 
-INFILE=$1
+INFILE="$1"
 if [ -z "$INFILE" ]; then
   echo "No INFILE provided!">&2
   usage 1
@@ -85,7 +85,7 @@ elif [[ "$INFILE" != *.txt.gz ]] || ! [[ $(file "$INFILE") =~ "gzip compressed d
 fi
 
 # REFSEQ="LPL_cds.fa"
-REFSEQ=$2
+REFSEQ="$2"
 if [ -z "$REFSEQ" ]; then
   echo "No REFERENCE FASTA provided!">&2
   usage 1
