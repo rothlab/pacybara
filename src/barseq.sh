@@ -141,7 +141,7 @@ for INPUTFQ in $(ls $INPUTFOLDER/*fastq.gz); do
       # --blacklist $BLACKLIST \
     RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log -t 24:00:00 \
       barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
-      --maxErr $BCMAXERR $CHUNK $LIBRARY)
+      --maxErr $BCMAXERR --r1 $CHUNK $LIBRARY)
     JOBID=${RETVAL##* }
     if [ -z "$JOBS" ]; then
       #if jobs is empty, set it to the new ID
