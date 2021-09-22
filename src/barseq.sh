@@ -120,28 +120,60 @@ mkdir -p ${WORKSPACE}chunks
 mkdir -p ${WORKSPACE}counts
 mkdir -p ${WORKSPACE}scores
 
-for INPUTFQ in $(ls $INPUTFOLDER/*fastq.gz); do
+#if we're in paired-end mode, look for R1 and R2 files separately
+if [[ $PAIREDEND == 1 ]]; then
+  R1FQS=$(ls $INPUTFOLDER/*fastq.gz)
+  #Do a preliminary scan to see if all files are accounted for
+  for R1FQ in "$R1FQS"; do
+    R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
+    if ! [[ -r "R2FQ" ]]; then
+      echo "ERROR: Unable to find or read R2 file $R2FQ !">&2
+      exit 1
+    fi
+  done
+else
+  #otherwise just use all fastq files directly
+  R1FQS=$(ls $INPUTFOLDER/*_R1_*fastq.gz)
+fi
+
+
+for R1FQ in "$R1FQS"; do
+
+  #output file
+  OUTFILE=${WORKSPACE}counts/$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_counts.txt/")
 
   #prefix for input chunks
-  PREFIX=$(basename "$INPUTFQ"|sed -r "s/\\.fastq\\.gz$/_/")
-  #output file
-  OUTFILE=${WORKSPACE}counts/$(basename "$INPUTFQ"|sed -r "s/\\.fastq\\.gz$/_counts.txt/")
-
+  R1PREFIX=$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_/")
 
   echo "Splitting FASTQ file into chunks"
-  zcat "$INPUTFQ"|split -a 3 -l 200000 --additional-suffix .fastq - "${WORKSPACE}chunks/$PREFIX"
-  CHUNKS=$(ls ${WORKSPACE}chunks/${PREFIX}*.fastq)
+  zcat "$R1FQ"|split -a 3 -l 200000 --additional-suffix .fastq - "${WORKSPACE}chunks/$R1PREFIX"
+  CHUNKS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*.fastq)
+
+  #deal with R2 reads
+  if [[ $PAIREDEND == 1 ]]; then
+    #infer name of R2 file again (we already checked for its existence above)
+    R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
+    R2PREFIX=$(basename "$R2FQ"|sed -r "s/\\.fastq\\.gz$/_/")
+    zcat "$R12Q"|split -a 3 -l 200000 --additional-suffix .fastq - "${WORKSPACE}chunks/$R2PREFIX"
+  fi
 
 
   JOBS=""
   echo "Processing chunks on HPC cluster."
   for CHUNK in $CHUNKS; do
     TAG=barseq$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
+
+    if [[ $PAIREDEND == 1 ]]; then
+      R2CHUNK=$(echo "$CHUNK"|sed -r "s/_R1_/_R2_/")
+      R2FLAG="--r2 $R2CHUNK"
+    else 
+      R2FLAG=""
+    fi
+
     #start barseq.R job and capture the job-id number
-      # --blacklist $BLACKLIST \
     RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log -t 24:00:00 \
       barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
-      --maxErr $BCMAXERR --r1 $CHUNK $LIBRARY)
+      --maxErr $BCMAXERR --r1 $CHUNK $R2FLAG $LIBRARY)
     JOBID=${RETVAL##* }
     if [ -z "$JOBS" ]; then
       #if jobs is empty, set it to the new ID
@@ -165,7 +197,7 @@ for INPUTFQ in $(ls $INPUTFOLDER/*fastq.gz); do
   done
 
   echo "Consolidating results..."
-  RESULTS=$(ls ${WORKSPACE}chunks/${PREFIX}*_hits.csv.gz)
+  RESULTS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*_hits.csv.gz)
   zcat $RESULTS|cut -f 1 -d,|sort|uniq -c>$OUTFILE
 
   #clean up 
