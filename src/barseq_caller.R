@@ -186,6 +186,6 @@ if (exists("con2")) close(con2)
 close(outcon)
 
 #print exception counts to log file
-cat(exceptions$export())
+cat(exceptions$export(),"\n")
 
-cat("Done!\n")
+cat("\nDone!\n")

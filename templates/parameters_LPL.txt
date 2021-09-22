@@ -6,7 +6,7 @@
 #Experiment title
 TITLE="LPL"
 #Barcode library CSV table (from Pacbio pipeline)
-LIBRARY="$HOME/projects/barseqPro/libraries/libraries/LPL_subassembly_bc1_varcalls_transl.csv"
+LIBRARY="$HOME/projects/barseqPro/libraries/LPL_subassembly_bc1_varcalls_transl.csv"
 #Barcode length:
 BCLEN=25
 #Maximum number of errors (mismatches) allowed in barcode

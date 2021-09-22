@@ -96,11 +96,23 @@ extractParamSection() {
   echo "$TMPFILE"
 }
 
+extractRX() {
+  if [[ $1 =~ $2 ]]; then
+    echo ${BASH_REMATCH[1]}
+  fi
+}
+
 #Load parameters
 source $(extractParamSection $PARAMETERS ARGUMENTS)
 FLANKING=$(extractParamSection $PARAMETERS 'FLANKING SEQUENCES')
 SAMPLES=$(extractParamSection $PARAMETERS SAMPLE)
 CDS=$(extractParamSection $PARAMETERS 'CODING SEQUENCE')
+
+#validate parameters
+if [[ ! -r $LIBRARY ]]; then
+  echo "Library at $LIBRARY could not be found or read!">&2
+  exit 1
+fi
 
 #set the correct argument for reverse complement
 if [[ $REVCOMP == 1 ]]; then
@@ -124,9 +136,9 @@ mkdir -p ${WORKSPACE}scores
 if [[ $PAIREDEND == 1 ]]; then
   R1FQS=$(ls $INPUTFOLDER/*fastq.gz)
   #Do a preliminary scan to see if all files are accounted for
-  for R1FQ in "$R1FQS"; do
+  for R1FQ in $R1FQS; do
     R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
-    if ! [[ -r "R2FQ" ]]; then
+    if  [[ ! -r "$R2FQ" ]]; then
       echo "ERROR: Unable to find or read R2 file $R2FQ !">&2
       exit 1
     fi
@@ -137,7 +149,7 @@ else
 fi
 
 
-for R1FQ in "$R1FQS"; do
+for R1FQ in $R1FQS; do
 
   #output file
   OUTFILE=${WORKSPACE}counts/$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_counts.txt/")
@@ -146,7 +158,8 @@ for R1FQ in "$R1FQS"; do
   R1PREFIX=$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_/")
 
   echo "Splitting FASTQ file into chunks"
-  zcat "$R1FQ"|split -a 3 -l 200000 --additional-suffix .fastq - "${WORKSPACE}chunks/$R1PREFIX"
+  zcat "$R1FQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
+    "${WORKSPACE}chunks/$R1PREFIX"
   CHUNKS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*.fastq)
 
   #deal with R2 reads
@@ -154,7 +167,8 @@ for R1FQ in "$R1FQS"; do
     #infer name of R2 file again (we already checked for its existence above)
     R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
     R2PREFIX=$(basename "$R2FQ"|sed -r "s/\\.fastq\\.gz$/_/")
-    zcat "$R12Q"|split -a 3 -l 200000 --additional-suffix .fastq - "${WORKSPACE}chunks/$R2PREFIX"
+    zcat "$R2FQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
+      "${WORKSPACE}chunks/$R2PREFIX"
   fi
 
 
@@ -196,6 +210,20 @@ for R1FQ in "$R1FQS"; do
     fi
   done
 
+  #Consolidate exception counts
+  for CHUNK in $CHUNKS; do
+    TAG=$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
+    LOG=${WORKSPACE}logs/barseq${TAG}.log
+    EXCLINE=$(grep failedExtraction $LOG)
+    ((FAILEDEXTRACTION += $(extractRX $EXCLINE "failedExtraction=([0-9]+)") ))
+    ((NOMATCH += $(extractRX $EXCLINE "noMatch=([0-9]+)") ))
+    ((AMBIGUOUS += $(extractRX $EXCLINE "ambiguous=([0-9]+)") ))
+  done
+  echo "failedExtraction=$FAILEDEXTRACTION">${WORKSPACE}/counts/exceptions.txt
+  echo "noMatch=$NOMATCH">>${WORKSPACE}/counts/exceptions.txt
+  echo "ambiguous=$AMBIGUOUS">>${WORKSPACE}/counts/exceptions.txt
+
+  #Consolidate individual result chunks
   echo "Consolidating results..."
   RESULTS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*_hits.csv.gz)
   zcat $RESULTS|cut -f 1 -d,|sort|uniq -c>$OUTFILE
