@@ -134,7 +134,7 @@ mkdir -p ${WORKSPACE}scores
 
 #if we're in paired-end mode, look for R1 and R2 files separately
 if [[ $PAIREDEND == 1 ]]; then
-  R1FQS=$(ls $INPUTFOLDER/*fastq.gz)
+  R1FQS=$(ls $INPUTFOLDER/*_R1_*fastq.gz)
   #Do a preliminary scan to see if all files are accounted for
   for R1FQ in $R1FQS; do
     R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
@@ -145,7 +145,7 @@ if [[ $PAIREDEND == 1 ]]; then
   done
 else
   #otherwise just use all fastq files directly
-  R1FQS=$(ls $INPUTFOLDER/*_R1_*fastq.gz)
+  R1FQS=$(ls $INPUTFOLDER/*fastq.gz)
 fi
 
 
@@ -201,6 +201,7 @@ for R1FQ in $R1FQS; do
   waitForJobs.sh -v "$JOBS"
 
   #Validate outputs
+  echo "Validating jobs..."
   for CHUNK in $CHUNKS; do
     TAG=$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
     LOG=${WORKSPACE}logs/barseq${TAG}.log
