@@ -151,6 +151,9 @@ fi
 
 for R1FQ in $R1FQS; do
 
+  echo ""
+  echo "Processing $R1FQ"
+
   #output file
   OUTFILE=${WORKSPACE}counts/$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_counts.txt/")
 
@@ -220,7 +223,8 @@ for R1FQ in $R1FQS; do
     ((NOMATCH += $(extractRX $EXCLINE "noMatch=([0-9]+)") ))
     ((AMBIGUOUS += $(extractRX $EXCLINE "ambiguous=([0-9]+)") ))
   done
-  echo "failedExtraction=$FAILEDEXTRACTION">${WORKSPACE}/counts/exceptions.txt
+  echo "$R1PREFIX">>${WORKSPACE}/counts/exceptions.txt
+  echo "failedExtraction=$FAILEDEXTRACTION">>${WORKSPACE}/counts/exceptions.txt
   echo "noMatch=$NOMATCH">>${WORKSPACE}/counts/exceptions.txt
   echo "ambiguous=$AMBIGUOUS">>${WORKSPACE}/counts/exceptions.txt
 
