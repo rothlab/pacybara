@@ -36,24 +36,30 @@ callVars() {
     NLINES=$((${HEADERS[1]}-2))
     INSCOUNT=0
     MCOUNT=0
+    #i iterates over the lines in the alignment
     for (( i = 0; i < $NLINES; i++ )); do
         ALTLINE=${LINES[$(($i+1))]}
         REFLINE=${LINES[$(($i+${HEADERS[1]}))]}
         # LLEN=${#REFLINE}
         # echo "$(($i+1)) $(($i+${HEADERS[1]})) - $LLEN"
-        #iterate over bases in line
+        #j iterates over bases in line
         for (( j = 0; j < $LLEN; j++ )); do
+            #if the read differes from the reference at this base
             if [[ ${ALTLINE:$j:1} != ${REFLINE:$j:1} ]]; then
+                #prepend a semicolon if this isn't the first mutation in here
                 if [[ $MCOUNT > 0 ]]; then
                     printf ";">>$OUTFILE
                 fi
+                #if the reference base is a "-", it's an insertion
                 if [[ ${REFLINE:$j:1} == "-" ]]; then
                     ((INSCOUNT++))
                     POS=$(($LLEN*$i + $j+1 - $INSCOUNT))
                     printf "$(($POS-1))_${POS}ins${ALTLINE:$j:1}">>$OUTFILE
+                #if the read base is a "-", it's a deletion
                 elif [[ ${ALTLINE:$j:1} == "-" ]]; then
                     POS=$(($LLEN*$i + $j+1 - $INSCOUNT))
                     printf "${POS}del">>$OUTFILE
+                #otherwise it's a substitution
                 else
                     POS=$(($LLEN*$i + $j+1 - $INSCOUNT))
                     printf "${POS}${REFLINE:$j:1}>${ALTLINE:$j:1}">>$OUTFILE
