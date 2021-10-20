@@ -34,7 +34,7 @@ Usage: pacbioCCS.sh [-c|--chunks <CHUNKS>] <INFILE> <REFERENCE>
                Defaults to $NCHUNKS .
 <INFILE>     : The compressed, tab-delimited .txt.gz file 
                containing Pacbio sequences
-<REFERENCE>  : A FASTA file containing the reference CDS sequence
+<PARAMS>  : A barseq parameter sheet file
 
 EOF
  exit $1
@@ -84,15 +84,40 @@ elif [[ "$INFILE" != *.txt.gz ]] || ! [[ $(file "$INFILE") =~ "gzip compressed d
   exit 1
 fi
 
-# REFSEQ="LPL_cds.fa"
-REFSEQ="$2"
-if [ -z "$REFSEQ" ]; then
-  echo "No REFERENCE FASTA provided!">&2
-  usage 1
-elif [[ "$REFSEQ" != *.fasta ]] && [[ "!REFSEQ" != *.fa ]]; then
-  echo "$REFSEQ must be a FASTA file!"
+#parameter file
+PARAMETERS=${2:-parameters.txt}
+if ! [[ -r "$PARAMETERS" ]]; then
+  echo "$PARAMETERS not found or unreadable!">&2
   exit 1
 fi
+
+#helper function to extract relevant sections from a parameter file
+extractParamSection() {
+  INFILE="$1"
+  SECTION="$2"
+  mkdir -p tmp
+  case "$SECTION" in
+    ARGUMENTS) TMPFILE=$(mktemp -p tmp/);;
+    *SEQUENCE*) TMPFILE=$(mktemp -p tmp/ --suffix=.fasta);;
+    SAMPLE) TMPFILE=$(mktemp -p tmp/ --suffix=.tsv);;
+    *) echo "Unrecognized section selected!"&&exit 2;;
+  esac
+  RANGE=($(grep -n "$SECTION" "$INFILE"|cut -f1 -d:))
+  sed -n "$((${RANGE[0]}+1)),$((${RANGE[1]}-1))p;$((${RANGE[1]}))q" "$INFILE">"$TMPFILE"
+  echo "$TMPFILE"
+}
+
+REFSEQ=$(extractParamSection $PARAMETERS 'CODING SEQUENCE')
+
+# REFSEQ="LPL_cds.fa"
+# REFSEQ="$2"
+# if [ -z "$REFSEQ" ]; then
+#   echo "No REFERENCE FASTA provided!">&2
+#   usage 1
+# elif [[ "$REFSEQ" != *.fasta ]] && [[ "!REFSEQ" != *.fa ]]; then
+#   echo "$REFSEQ must be a FASTA file!"
+#   exit 1
+# fi
 
 #set outfile based on infile
 OUTFILE=$(echo "$INFILE"|sed -r "s/\\.txt.gz$/_varcalls.txt/")
