@@ -27,10 +27,11 @@ barseq.sh v0.0.1
 by Jochen Weile <jochenweile@gmail.com> 2021
 
 Processes BarSeq data ona SLURM HPC cluster.
-Usage: barseq.sh <INDIR> <PARAMS>
+Usage: barseq.sh [-b|--blacklist <BLACKLIST>] <INDIR> <PARAMS>
 
-<INDIR>     : The input directory containing the fastq.gz files
-<PARAMS>    : A barseq parameter sheet file
+<INDIR>        : The input directory containing the fastq.gz files
+<PARAMS>       : A barseq parameter sheet file
+-b|--blacklist : An optional comma-separated blacklist of nodes to avoid
 
 EOF
  exit $1
@@ -38,11 +39,21 @@ EOF
 
 #Parse Arguments
 PARAMS=""
+BLACKLIST=""
 while (( "$#" )); do
   case "$1" in
     -h|--help)
       usage 0
       shift
+      ;;
+    -b|--blacklist)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        BLACKLIST=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
       ;;
     --) # end of options indicates that the main command follows
       shift
@@ -77,8 +88,11 @@ if ! [[ -r "$PARAMETERS" ]]; then
   exit 1
 fi
 
-#blacklist of nodes with broken R installations
-# BLACKLIST=galen1,galen2,galen4,galen5,galen10,galen24,galen25,galen27,galen31,galen35,galen40,galen41,galen43,galen54,galen57,galen58,galen59,galen60,galen61,galen62,galen63,galen64,galen65
+if [[ -z $BLACKLIST ]]; then
+  BLARG=""
+else
+  BLARG="--blacklist $BLACKLIST"
+fi
 
 #helper function to extract relevant sections from a parameter file
 extractParamSection() {
@@ -189,6 +203,7 @@ for R1FQ in $R1FQS; do
 
     #start barseq.R job and capture the job-id number
     RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log -t 24:00:00 \
+      $BLARG \
       barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
       --maxErr $BCMAXERR --r1 $CHUNK $R2FLAG $LIBRARY)
     JOBID=${RETVAL##* }

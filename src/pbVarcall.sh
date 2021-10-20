@@ -17,6 +17,7 @@
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
 
 NCHUNKS=1000
+BLACKLIST=""
 
 #helper function to print usage information
 usage () {
@@ -28,13 +29,15 @@ by Jochen Weile <jochenweile@gmail.com> 2021
 
 Runs parallel variant calling on Pacbio consensus sequences using needle  
 SLURM HPC cluster.
-Usage: pacbioCCS.sh [-c|--chunks <CHUNKS>] <INFILE> <REFERENCE>
+Usage: pacbioCCS.sh [-c|--chunks <CHUNKS>] [-b|--blaclist <BLACKLIST>] 
+    <INFILE> <REFERENCE>
 
--c|--chunks  : The number of chunks to process in parallel.
-               Defaults to $NCHUNKS .
-<INFILE>     : The compressed, tab-delimited .txt.gz file 
-               containing Pacbio sequences
-<PARAMS>  : A barseq parameter sheet file
+-c|--chunks    : The number of chunks to process in parallel.
+                 Defaults to $NCHUNKS .
+-b|--blacklist : An optional comma-separated blacklist of nodes to avoid
+<INFILE>       : The compressed, tab-delimited .txt.gz file 
+                 containing Pacbio sequences
+<PARAMS>       : A barseq parameter sheet file
 
 EOF
  exit $1
@@ -51,6 +54,15 @@ while (( "$#" )); do
     -c|--chunks)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
         NCHUNKS=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -b|--blacklist)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        BLACKLIST=$2
         shift 2
       else
         echo "ERROR: Argument for $1 is missing" >&2
@@ -91,6 +103,12 @@ if ! [[ -r "$PARAMETERS" ]]; then
   exit 1
 fi
 
+if [[ -z $BLACKLIST ]]; then
+  BLARG=""
+else
+  BLARG="--blacklist $BLACKLIST"
+fi
+
 #helper function to extract relevant sections from a parameter file
 extractParamSection() {
   INFILE="$1"
@@ -127,7 +145,8 @@ mkdir -p chunks
 zcat "$INFILE"|split -l $NCHUNKS - chunks/chunk
 for CHUNK in $(ls chunks/*); do
     ID=$(basename $CHUNK)
-    submitjob.sh -t "00:30:00" -n "$ID" -- ./pbVarcall_worker.sh "$CHUNK" "$REFSEQ"
+    submitjob.sh -t "00:30:00" -n "$ID" $BLARG -- \
+    pbVarcall_worker.sh "$CHUNK" "$REFSEQ"
 done
 
 waitForJobs.sh
@@ -136,7 +155,8 @@ waitForJobs.sh
 cat chunks/*_varcall.txt>$OUTFILE&&rm chunks/*
 
 #translate variant calls to amino acid level
-submitjob.sh -t 00:30:00 -n translate -- pbVarcall_translate.R $OUTFILE parameters.json
+submitjob.sh -t 00:30:00 -n translate $BLARG -- \
+pbVarcall_translate.R $OUTFILE parameters.json
 
 waitForJobs.sh
 
