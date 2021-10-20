@@ -29,7 +29,7 @@ by Jochen Weile <jochenweile@gmail.com> 2021
 
 Runs parallel variant calling on Pacbio consensus sequences using needle  
 SLURM HPC cluster.
-Usage: pacbioCCS.sh [-c|--chunks <CHUNKS>] [-b|--blaclist <BLACKLIST>] 
+Usage: pacbioCCS.sh [-c|--chunks <CHUNKS>] [-b|--blacklist <BLACKLIST>] 
     <INFILE> <REFERENCE>
 
 -c|--chunks    : The number of chunks to process in parallel.
@@ -141,22 +141,36 @@ REFSEQ=$(extractParamSection $PARAMETERS 'CODING SEQUENCE')
 OUTFILE=$(echo "$INFILE"|sed -r "s/\\.txt.gz$/_varcalls.txt/")
 
 #split file into chunks and process using worker scripts
+echo "Splitting file into chunks..."
 mkdir -p chunks
 zcat "$INFILE"|split -l $NCHUNKS - chunks/chunk
+
+echo "Calling mutations in chunks..."
+JOBS=""
 for CHUNK in $(ls chunks/*); do
     ID=$(basename $CHUNK)
-    submitjob.sh -t "00:30:00" -n "$ID" $BLARG -- \
-    pbVarcall_worker.sh "$CHUNK" "$REFSEQ"
+    RETVAL=$(submitjob.sh -t "00:30:00" -n "$ID" $BLARG -- \
+      pbVarcall_worker.sh "$CHUNK" "$REFSEQ")
+    JOBID=${RETVAL##* }
+    if [ -z "$JOBS" ]; then
+      #if jobs is empty, set it to the new ID
+      JOBS=$JOBID
+    else
+      #otherwise append the id to the list
+      JOBS=${JOBS},$JOBID
+    fi
 done
 
-waitForJobs.sh
+waitForJobs.sh -v "$JOBS"
 
 #consolidate outputs
+echo "Consolidating results..."
 cat chunks/*_varcall.txt>$OUTFILE&&rm chunks/*
 
 #translate variant calls to amino acid level
-submitjob.sh -t 00:30:00 -n translate $BLARG -- \
-pbVarcall_translate.R $OUTFILE parameters.json
+echo "Translating results to amino acid levels..."
+submitjob.sh -t 00:30:00 -c 8 -n translate $BLARG -- \
+pbVarcall_translate.R "$OUTFILE" "$REFSEQ"
 
 waitForJobs.sh
 
