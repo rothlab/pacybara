@@ -14,7 +14,7 @@ BCMAXERR=2
 #Whether reads are in reverse complement. 1=yes, 0=no
 REVCOMP=1
 #Whether the sequencing run uses paired-end mode
-PAIREDEND=1
+PAIREDEND=0
 #END ARGUMENTS
 
 #BEGIN FLANKING SEQUENCES
