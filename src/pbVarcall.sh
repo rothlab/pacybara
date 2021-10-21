@@ -169,9 +169,9 @@ cat chunks/*_varcall.txt>$OUTFILE&&rm chunks/*
 
 #translate variant calls to amino acid level
 echo "Translating results to amino acid levels..."
-submitjob.sh -t 00:30:00 -c 8 -n translate $BLARG -- \
+submitjob.sh -t "02:00:00" -c 8 -n translate $BLARG -- \
 pbVarcall_translate.R "$OUTFILE" "$REFSEQ"
 
-waitForJobs.sh
+waitForJobs.sh -v
 
 echo "Done!"

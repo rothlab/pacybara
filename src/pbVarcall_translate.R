@@ -15,7 +15,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
-options(stringsAsFactors=FALSE)
+options(
+  stringsAsFactors=FALSE,
+  ignore.interactive=TRUE
+)
 
 library(argparser)
 library(yogitools)
@@ -48,14 +51,19 @@ out <- yogitools::as.df(pbmclapply(
 # out <- yogitools::as.df(lapply(
   vc[,2],
   function(mut) {
-    if (mut=="=") {
-      list(hgvsc="c.=",hgvsp="p.=",codonChanges="WT",
-        codonHGVS="c.=",aaChanges="WT",aaChangeHGVS="p.=")
-    } else if (grepl(";",mut)) {
-      hgvsParseR::translateHGVS(paste0("c.[",mut,"]"),cdsSeq,builder,cbuilder)
-    } else {
-      hgvsParseR::translateHGVS(paste0("c.",mut),cdsSeq,builder,cbuilder)
-    }
+    tryCatch({
+      if (mut=="=") {
+        list(hgvsc="c.=",hgvsp="p.=",codonChanges="WT",
+          codonHGVS="c.=",aaChanges="WT",aaChangeHGVS="p.=")
+      } else if (grepl(";",mut)) {
+        hgvsParseR::translateHGVS(paste0("c.[",mut,"]"),cdsSeq,builder,cbuilder)
+      } else {
+        hgvsParseR::translateHGVS(paste0("c.",mut),cdsSeq,builder,cbuilder)
+      }
+    }, error=function(e) {
+      list(hgvsc=conditionMessage(e),hgvsp=NA_character_,codonChanges=NA_character_,
+          codonHGVS=NA_character_,aaChanges=NA_character_,aaChangeHGVS=NA_character_)
+    })
   }
   ,mc.cores=8
 ))
