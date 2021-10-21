@@ -51,6 +51,8 @@ out <- yogitools::as.df(pbmclapply(
 # out <- yogitools::as.df(lapply(
   vc[,2],
   function(mut) {
+    #remove leading or trailing semicolons
+    mut <- gsub("^;|;$","",mut)
     tryCatch({
       if (mut=="=") {
         list(hgvsc="c.=",hgvsp="p.=",codonChanges="WT",
