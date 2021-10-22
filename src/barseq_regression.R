@@ -1,5 +1,7 @@
 #/bin/env Rscript
 
+options(stringsAsFactors=FALSE)
+
 # infiles <- list.files(pattern="Region1.*\\.csv")
 
 # bins <- yogitools::extract.groups(infiles,"(Q\\d+)")[,1]
@@ -16,17 +18,21 @@
 # colnames(scores) <- bins
 # scores <- cbind(hgvs=allMut,scores)
 
+bins <- paste0("Q",1:4)
+
+
 lrs <- read.csv("allLRs.csv")
 isSingleMut <- grepl("^p\\.[A-Za-z]{3}\\d+[A-Za-z]{3}$|^p\\.[A-Za-z]{3}\\d+=$",lrs$aaChangeHGVS)
 lrs <- lrs[isSingleMut,]
-lrvals <- lrs[,sprintf("Region1.Q%d.lr",1:4)]
-lrsds <- lrs[,sprintf("Region1.Q%d.sd",1:4)]
+lrvals <- lrs[,sprintf("Region1.%s.lr",bins)]
+lrsds <- lrs[,sprintf("Region1.%s.sd",bins)]
+
 
 nonempty <- apply(lrvals,1,function(row)all(is.finite(row)))
 wellmeasured <- lrs[,"Region1.Q1.allfreq"] > 5e-7
 lrs <- lrs[which(nonempty & wellmeasured),]
-lrvals <- lrvals[nonempty,]
-lrsds <- lrsds[nonempty,]
+lrvals <- lrvals[nonempty & wellmeasured,]
+lrsds <- lrsds[nonempty & wellmeasured,]
 
 nsIdx <- grepl("Ter$",lrs$aaChangeHGVS)
 synIdx <- grepl("=$",lrs$aaChangeHGVS)
@@ -36,21 +42,39 @@ drawBinCurve <- function(idx,...) {
   plot(NA,type="n",
     xlim=c(1,4),ylim=range(lrvals),
     xlab="bin",ylab="LR",
-    axes=FALSE
+    axes=FALSE,...
   )
   axis(2)
   axis(1,at=1:4,labels=bins)
   invisible(lapply(idx, function(i){
     lines(1:4,lrvals[i,],...)
   }))
+  abline(h=0,lty="dashed")
 }
 
+pdf("binCurves.pdf",5,10)
 op <- par(mfrow=c(3,1))
-drawBinCurve(which(synIdx),col=yogitools::colAlpha("chartreuse3",0.2))
-drawBinCurve(which(nsIdx),col=yogitools::colAlpha("firebrick3",0.2))
-drawBinCurve(sample(which(misIdx),1000),col=yogitools::colAlpha(1,0.2))
+drawBinCurve(which(synIdx),
+  col=yogitools::colAlpha("chartreuse3",0.2),
+  main="Synonymous"
+)
+drawBinCurve(which(nsIdx),
+  col=yogitools::colAlpha("firebrick3",0.2),
+  main="Nonsense"
+)
+drawBinCurve(sample(which(misIdx),1000),
+  col=yogitools::colAlpha("royalblue3",0.2),
+  main="Missense"
+)
 par(op)
-
+dev.off()
 
 dotcol <- misIdx + 2*nsIdx + 3*synIdx
-pairs(lrvals,col=dotcol,pch=".")
+res <- 200
+png("binDots.png",width=res*5,height=res*5,res=res)
+pairs(lrvals,col=dotcol,pch=c(".","x","o")[dotcol],
+  labels=bins
+)
+dev.off()
+
+
