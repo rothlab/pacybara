@@ -174,4 +174,7 @@ pbVarcall_translate.R "$OUTFILE" "$REFSEQ"
 
 waitForJobs.sh -v
 
+#cleanup 
+rmdir chunks alignments
+
 echo "Done!"
