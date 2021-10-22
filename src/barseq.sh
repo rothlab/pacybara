@@ -110,6 +110,7 @@ extractParamSection() {
   echo "$TMPFILE"
 }
 
+#helper function to extract string using regex
 extractRX() {
   if [[ $1 =~ $2 ]]; then
     echo ${BASH_REMATCH[1]}
@@ -162,32 +163,10 @@ else
   R1FQS=$(ls $INPUTFOLDER/*fastq.gz)
 fi
 
+#helper function to process a list of FASTQ chunks
+processChunks() {
 
-for R1FQ in $R1FQS; do
-
-  echo ""
-  echo "Processing $R1FQ"
-
-  #output file
-  OUTFILE=${WORKSPACE}counts/$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_counts.txt/")
-
-  #prefix for input chunks
-  R1PREFIX=$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_/")
-
-  echo "Splitting FASTQ file into chunks"
-  zcat "$R1FQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
-    "${WORKSPACE}chunks/$R1PREFIX"
-  CHUNKS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*.fastq)
-
-  #deal with R2 reads
-  if [[ $PAIREDEND == 1 ]]; then
-    #infer name of R2 file again (we already checked for its existence above)
-    R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
-    R2PREFIX=$(basename "$R2FQ"|sed -r "s/\\.fastq\\.gz$/_/")
-    zcat "$R2FQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
-      "${WORKSPACE}chunks/$R2PREFIX"
-  fi
-
+  CHUNKS=$1
 
   JOBS=""
   echo "Processing chunks on HPC cluster."
@@ -218,16 +197,74 @@ for R1FQ in $R1FQS; do
 
   waitForJobs.sh -v "$JOBS"
 
-  #Validate outputs
-  echo "Validating jobs..."
+}
+
+checkForFailedJobs() {
+
+  CHUNKS=$1
+
+  FAILEDCHUNKS=""
   for CHUNK in $CHUNKS; do
     TAG=$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
     LOG=${WORKSPACE}logs/barseq${TAG}.log
     STATUS=$(tail -1 $LOG)
     if [ "$STATUS" != "Done!" ]; then
-      echo "$TAG failed!"
+      echo "Process $TAG failed!">&2
+      if [[ -z $FAILEDCHUNKS ]]; then
+        FAILEDCHUNKS="$CHUNK"
+      else
+        FAILEDCHUNKS="$FAILEDCHUNKS $CHUNK"
+      fi
     fi
   done
+  echo "$FAILEDCHUNKS"
+}
+
+for R1FQ in $R1FQS; do
+
+  echo ""
+  echo "Processing $R1FQ"
+
+  #output file
+  OUTFILE=${WORKSPACE}counts/$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_counts.txt/")
+
+  #prefix for input chunks
+  R1PREFIX=$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_/")
+
+  echo "Splitting FASTQ file into chunks"
+  zcat "$R1FQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
+    "${WORKSPACE}chunks/$R1PREFIX"
+  CHUNKS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*.fastq)
+
+  #deal with R2 reads
+  if [[ $PAIREDEND == 1 ]]; then
+    #infer name of R2 file again (we already checked for its existence above)
+    R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
+    R2PREFIX=$(basename "$R2FQ"|sed -r "s/\\.fastq\\.gz$/_/")
+    zcat "$R2FQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
+      "${WORKSPACE}chunks/$R2PREFIX"
+  fi
+
+  #process chunks and wait for completion
+  processChunks "$CHUNKS"
+  echo "Validating jobs..."
+  FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
+
+  #If any jobs failed, try 2 more times
+  TRIES=1
+  while ! [[ -z $FAILEDCHUNKS ]]; do
+    if [[ $TRIES < 3 ]]; then
+      echo "Attempting to re-run failed jobs."
+      processChunks "$FAILEDCHUNKS"
+      echo "Validating jobs..."
+      FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
+      ((TRIES++))
+    else
+      echo "ERROR: Exhausted 3 attempts at re-running failed jobs!">&2
+      exit 1
+    fi
+  done
+
 
   #Consolidate exception counts
   for CHUNK in $CHUNKS; do
