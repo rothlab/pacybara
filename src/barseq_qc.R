@@ -29,6 +29,8 @@ p <- add_argument(p, "counts", help="counts file")
 p <- add_argument(p, "outdir", help="output directory")
 pargs <- parse_args(p)
 
+# pargs <- list(lrs="scores/allLRs.csv",counts="counts/allCounts.csv",outdir="qc/")
+
 dir.create(pargs$outdir,recursive=TRUE)
 
 lrs <- read.csv(pargs$lrs)
@@ -169,9 +171,60 @@ par(op)
 invisible(dev.off())
 
 
-stops <- unlist(sapply(strsplit(stopLRs[which(stopLRs$Surface.F4.lr > -0.5),"aaChanges"],"\\|"),function(muts){
-  muts <- muts[grep("\\*$",muts)]
-  pos <- as.integer(gsub("\\D+","",muts))
-  muts[which.min(pos)]
-}))
-sort(table(stops),decreasing=TRUE)
+
+
+# stops <- unlist(sapply(strsplit(stopLRs[which(stopLRs$Surface.F4.lr > -0.5),"aaChanges"],"\\|"),function(muts){
+#   muts <- muts[grep("\\*$",muts)]
+#   pos <- as.integer(gsub("\\D+","",muts))
+#   muts[which.min(pos)]
+# }))
+# sort(table(stops),decreasing=TRUE)
+
+
+excFile <- sub("allCounts.csv$","exceptions.txt",pargs$counts)
+nmFile <- sub("allCounts.csv$","noMatch.csv",pargs$counts)
+excLines <- readLines(excFile)
+nmTable <- read.csv(nmFile,row.names=1)
+
+excNames <- excLines[seq(1,length(excLines),4)]
+excFE <- excLines[seq(2,length(excLines),4)]
+excNM <- excLines[seq(3,length(excLines),4)]
+excAMB <- excLines[seq(4,length(excLines),4)]
+
+excSampleD <- sub("_S\\d+.+","",excNames)
+excSample <- gsub("-",".",sub("_S\\d+.+","",excNames))
+failedExtraction <- as.integer(yogitools::extract.groups(excFE,"=(\\d+)$")[,1])
+noMatch <- as.integer(yogitools::extract.groups(excNM,"=(\\d+)$")[,1])
+ambig <- as.integer(yogitools::extract.groups(excAMB,"=(\\d+)$")[,1])
+
+
+# deCumufy <- function(xs) {
+#   sapply(1:length(xs), function(i) {
+#     if (i==1) return(xs[[1]])
+#     else xs[[i]]-sum(xs[[(i-1)]])
+#   })
+# }
+# failedExtraction <- deCumufy(failedExtraction)
+# noMatch <- deCumufy(noMatch)
+# ambig <- deCumufy(ambig)
+
+rawCounts <- nmTable[excSampleD,]
+rest <- rawCounts$totalReads-failedExtraction+noMatch+ambig
+
+pdf(paste0(pargs$outdir,"readFates.pdf"),7,6)
+op <- par(las=3,mar=c(12,4,1,1))
+plotcols=c("firebrick3","orange","gold","chartreuse3")
+plotData <- rbind(
+  failedExtraction=failedExtraction,
+  noMatch=noMatch,
+  ambiguous=ambig,
+  passed=rest
+)
+barplot(plotData,col=plotcols,border=NA,
+  names.arg=excSampleD,ylab="reads"
+)
+grid(NA,NULL)
+legend("right",rownames(plotData),fill=plotcols,bg="white")
+par(op)
+dev.off()
+
