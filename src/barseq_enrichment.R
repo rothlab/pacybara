@@ -31,6 +31,8 @@ p <- add_argument(p, "samples", help="sample table file")
 p <- add_argument(p, "outdir", help="output directory")
 pargs <- parse_args(p)
 
+# pargs <- list(counts="counts/allCounts.csv",samples="samples.tsv",outdir="scores/")
+
 counts <- read.csv(pargs$counts)
 samples <- read.delim(pargs$samples)
 
@@ -102,10 +104,11 @@ lrs <- cbind(counts[,1:7],lrs)
 write.csv(lrs,paste0(pargs$outdir,"allLRs.csv"),row.names=FALSE)
 
 #normalize to lrs to scores
-wtclones <- which(lrs$hgvsc=="c.=")
-stopclones <- grep("Ter$",lrs$hgvsp)
 scores <- do.call(cbind,setNames(lapply(assays, function(assay) {
   sConds <- setdiff(unique(samples[samples$assay==assay,"condition"]),"All")
+  wellmeasured <- msd[,paste0(assay,".All.mean")] > 1e-6
+  wtclones <- which(lrs$hgvsc=="c.=" & wellmeasured)
+  stopclones <- which(grepl("Ter$",lrs$hgvsp) & wellmeasured)
   do.call(cbind,setNames(lapply(sConds, function(sCond) {
     lrcol <- sprintf("%s.%s.lr",assay,sCond)
     sdcol <- sprintf("%s.%s.sd",assay,sCond)
