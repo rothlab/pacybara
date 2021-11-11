@@ -199,6 +199,8 @@ processChunks() {
 
 }
 
+#helper function to check for failed jobs.
+#returns a list of any failed jobs
 checkForFailedJobs() {
 
   CHUNKS=$1
@@ -267,6 +269,9 @@ for R1FQ in $R1FQS; do
 
 
   #Consolidate exception counts
+  FAILEDEXTRACTION=0
+  NOMATCH=0
+  AMBIGUOUS=0
   for CHUNK in $CHUNKS; do
     TAG=$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
     LOG=${WORKSPACE}logs/barseq${TAG}.log
