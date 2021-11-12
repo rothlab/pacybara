@@ -30,14 +30,14 @@ by Jochen Weile <jochenweile@gmail.com> 2021
 Runs parallel variant calling on Pacbio consensus sequences using needle  
 SLURM HPC cluster.
 Usage: pacbioCCS.sh [-c|--chunks <CHUNKS>] [-b|--blacklist <BLACKLIST>] 
-    <INFILE> <REFERENCE>
+    <INFILE> <PARAMETERS>
 
 -c|--chunks    : The number of chunks to process in parallel.
                  Defaults to $NCHUNKS .
 -b|--blacklist : An optional comma-separated blacklist of nodes to avoid
 <INFILE>       : The compressed, tab-delimited .txt.gz file 
                  containing Pacbio sequences
-<PARAMS>       : A barseq parameter sheet file
+<PARAMETERS>   : A barseq parameter sheet file
 
 EOF
  exit $1
