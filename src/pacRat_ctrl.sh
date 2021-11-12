@@ -26,6 +26,8 @@ ORFSTART=207
 ORFEND=2789
 THREADS=24
 QARG=""
+MINREADS=2
+MINFREQ=0.6
 
 #helper function to print usage information
 usage () {
@@ -45,6 +47,10 @@ Usage: pacRat_ctrl.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>] [-q|--
 -s|--orfStart  : The ORF start position, defaults to $ORFSTART
 -e|--orfEnd    : The ORF end position, defaults to $ORFEND
 -q|--queue     : The queue (slurm partition) to use
+-r|--minReads  : Minimum number of reads required to accept barcode, 
+                 defaults to $MINREADS
+-f|--minFreq   : Minimum frequency of alignment base for consensus,
+                 defaults to $MINFREQ
 <INDIR>        : The input directory containing fastq.gz files to process
 <FASTA>        : The raw reference fasta file 
 <WORKSPACE>    : The workspace directory. Defaults to 'workspace/'
@@ -114,6 +120,32 @@ while (( "$#" )); do
     -q|--queue)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
         QARG="-q $2"
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -r|--minReads)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: minReads must be a positive integer number" >&2
+           usage 1
+        fi
+        MINREADS=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -f|--minFreq)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 > 0 && $2 < 1 ]] ; then
+           echo "ERROR: minFreq must be a number between 0 and 1" >&2
+           usage 1
+        fi
+        MINFREQ=$2
         shift 2
       else
         echo "ERROR: Argument for $1 is missing" >&2
@@ -228,7 +260,7 @@ for INFQ in $INFQS; do
   RETVAL=$(submitjob.sh -n "pacrat$i" -t 24:00:00 $QARG\
     -c $THREADS -m $(($THREADS*2))G -l "$LOGFILE" -e "${LOGFILE}err" -- \
     scripts/pacRat_worker.sh --barcode $BARCODE --barcodePos $BCPOS \
-    --orfStart $ORFSTART --orfEnd $ORFEND \
+    --orfStart $ORFSTART --orfEnd $ORFEND -f $MINFREQ -r $MINREADS \
     "$INFQ" "$REFFASTANOBC" "$WORKSPACE")
   JOBID=${RETVAL##* }
 
