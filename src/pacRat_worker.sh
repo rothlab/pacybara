@@ -24,6 +24,8 @@ BCPOS=153
 ORFSTART=207
 ORFEND=2789
 THREADS=24
+MINREADS=2
+MINFREQ=0.6
 
 #helper function to print usage information
 usage () {
@@ -44,6 +46,10 @@ Usage: pacRat_worker.sh [-b|--barcode <BARCODE>] [-p|--barcodePos <BCPOS>]
 -s|--orfStart  : The ORF start position, defaults to $ORFSTART
 -e|--orfEnd    : The ORF end position, defaults to $ORFEND
 -c|--cpus      : Number of CPU cores, defaults to $THREADS
+-r|--minReads  : Minimum number of reads required to accept barcode, 
+                 defaults to $MINREADS
+-f|--minFreq   : Minimum frequency of alignment base for consensus,
+                 defaults to $MINFREQ
 <FASTQ>        : The input fastq.gz file
 <FASTA>        : The reference fasta file (with removed barcodes)
 <WORKSPACE>    : The workspace directory
@@ -127,6 +133,32 @@ while (( "$#" )); do
            usage 1
         fi
         ORFEND=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -r|--minReads)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: minReads must be a positive integer number" >&2
+           usage 1
+        fi
+        MINREADS=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -f|--minFreq)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 > 0 && $2 < 1 ]] ; then
+           echo "ERROR: minFreq must be a number between 0 and 1" >&2
+           usage 1
+        fi
+        MINFREQ=$2
         shift 2
       else
         echo "ERROR: Argument for $1 is missing" >&2
@@ -266,8 +298,14 @@ conda activate msa_ccs
 echo "Running PacRat..."
 python3.6 PacRAT/msa_pacbio.py -d "$OUTFOLDER" -o "$OUTFILE" \
   --highQual <(gzip -cd "$HIQFILE") --inputSeqs <(gzip -cd "$EXTRACTFILE") \
-  -c 1 -t 0.6 -s -m $(which muscle) -n $(which needle)
+  -c $MINREADS -t $MINFREQ -s -r -m $(which muscle) -n $(which needle)
 # dieOnError $? !!
+
+#compressing result file
+gzip "${OUTFOLDER}$OUTFILE"
+
+#run pbvarcall in a subshell within the output folder
+(cd $OUTFOLDER && pbVarcall.sh "$OUTFILE" $PARAMETERS)
 
 #deactivate environment
 conda deactivate
