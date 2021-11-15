@@ -29,8 +29,8 @@ p <- arg_parser(
 )
 p <- add_argument(p, "infile", help="input file")
 p <- add_argument(p, "ccsCounts", help="CCS read count file")
-p <- add_argument(p, "minCCS", help="CCS read count file",default=2)
-p <- add_argument(p, "minIndel", help="CCS read count file",default=2)
+p <- add_argument(p, "--minCCS", help="minimum number of CCS reads to pass filter",default=2)
+p <- add_argument(p, "--minIndel", help="minimum number of reads to accept indels",default=2)
 pargs <- parse_args(p)
 
 # pargs <- list(
@@ -64,5 +64,5 @@ outfile <- sub("\\.txt$","_filtered.txt",pargs$infile)
 out <- varcallsFiltered[,c("barcode","fixedcalls")]
 write.table(out,outfile,row.names=FALSE,sep="\t",quote=FALSE)
 
-cat("Done!")
+cat("Done!\n")
 
