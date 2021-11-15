@@ -58,11 +58,11 @@ sepCalls[idx] <- lapply(sepCalls[idx],function(muts) {
     return(muts)
   }
 })
-varcallsFiltered$fixedcalls <- sapply(sepCalls,paste,collapse=";")
+varcallsFiltered$snvs <- sapply(sepCalls,paste,collapse=";")
 
 outfile <- sub("\\.txt$","_filtered.txt",pargs$infile)
-out <- varcallsFiltered[,c("barcode","fixedcalls")]
-write.table(out,outfile,row.names=FALSE,sep="\t",quote=FALSE)
+out <- varcallsFiltered[,c("barcode","snvs")]
+write.table(out,outfile,row.names=FALSE,sep="\t",quote=FALSE,col.names=FALSE)
 
 cat("Done!\n")
 
