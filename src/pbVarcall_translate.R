@@ -26,6 +26,7 @@ library(yogitools)
 library(hgvsParseR)
 library(yogiseq)
 library(pbmcapply)
+library(hash)
 
 p <- arg_parser(
   "translate library",
