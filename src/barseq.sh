@@ -292,7 +292,7 @@ for R1FQ in $R1FQS; do
 
   #clean up 
   rm $CHUNKS $RESULTS
-  tar czf ${WORKSPACE}logs/countLogs.tgz ${WORKSPACE}logs/*log
+  tar czf "${WORKSPACE}logs/countLogs_${R1PREFIX}.tgz" ${WORKSPACE}logs/*log
   rm ${WORKSPACE}logs/*log
 
 done
