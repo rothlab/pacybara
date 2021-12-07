@@ -273,7 +273,7 @@ fi
 if [[ ! -s $EXTRACTFILE ]]; then
   echo "Extracting barcodes..."
   python AssemblyByPacBio/extractBarcodeInsertPairs_moreQC.py "$ALNFILE2" \
-    --length=$BLEN --position=$BCPOS --start=$(($ORFSTART-$BLEN-1)) --end=$(($ORFEND-$BLEN)) \
+    --length=$BLEN --position=$((BCPOS-1)) --start=$(($ORFSTART-$BLEN-1)) --end=$(($ORFEND-$BLEN)) \
     | gzip -c >"$EXTRACTFILE"
   # dieOnError $? !!
 else 
