@@ -118,10 +118,14 @@ par(op)
 invisible(dev.off())
 
 
+conds <- sub("\\.allfreq$","",colnames(lrs)[grep("allfreq",colnames(lrs))])
+relCond <- conds[[length(conds)]]
 
+afCol <- paste0(relCond,".allfreq")
+lrCol <- paste0(relCond,".lr")
 
-
-hqLRs <- lrs[which(lrs$Uptake.F5.allfreq > 1e-6),]
+# hqLRs <- lrs[which(lrs$Uptake.F5.allfreq > 1e-6),]
+hqLRs <- lrs[which(lrs[,afCol] > 1e-6),]
 
 isSyn <- sapply(strsplit(gsub("p\\.|\\[|\\]","",hqLRs$hgvsp),";"), function(muts) {
   all(grepl("=$",muts))
@@ -138,35 +142,35 @@ pdf(paste0(pargs$outdir,"barseqDistributions_UptF5.pdf"),7,6)
 op <- par(mfcol=c(3,2))
 breaks <- seq(-5,5,0.05)
 hist(
-  wtLRs$Uptake.F5.lr,breaks=breaks,
+  wtLRs[,lrCol],breaks=breaks,
   col="darkolivegreen3",border=NA,main="WT clones",
   xlab="log10(F4/All)"
 )
-abline(v=mean(yogitools::fin(wtLRs$Uptake.F5.lr)),lty="dotted")
+abline(v=mean(yogitools::fin(wtLRs[,lrCol])),lty="dotted")
 hist(
-  stopLRs$Uptake.F5.lr,breaks=breaks,
+  stopLRs[,lrCol],breaks=breaks,
   col="firebrick3",border=NA,main="Nonsense clones",
   xlab="log10(F4/All)"
 )
-abline(v=mean(yogitools::fin(stopLRs$Uptake.F5.lr)),lty="dotted")
+abline(v=mean(yogitools::fin(stopLRs[,lrCol])),lty="dotted")
 hist(
-  synLRs$Uptake.F5.lr,breaks=breaks,
+  synLRs[,lrCol],breaks=breaks,
   col="darkolivegreen2",border=NA,main="Synonymous clones",
   xlab="log10(F4/All)"
 )
-abline(v=mean(yogitools::fin(synLRs$Uptake.F5.lr)),lty="dotted")
+abline(v=mean(yogitools::fin(synLRs[,lrCol])),lty="dotted")
 hist(
-  fsLRs$Uptake.F5.lr,breaks=breaks,
+  fsLRs[,lrCol],breaks=breaks,
   col="firebrick4",border=NA,main="Frameshift clones",
   xlab="log10(F4/All)"
 )
-abline(v=mean(yogitools::fin(fsLRs$Uptake.F5.lr)),lty="dotted")
+abline(v=mean(yogitools::fin(fsLRs[,lrCol])),lty="dotted")
 hist(
-  misLRs$Uptake.F5.lr,breaks=breaks,
+  misLRs[,lrCol],breaks=breaks,
   col="gray",border=NA,main="Missense clones",
   xlab="log10(F4/All)"
 )
-abline(v=mean(yogitools::fin(misLRs$Uptake.F5.lr)),lty="dotted")
+abline(v=mean(yogitools::fin(misLRs[,lrCol])),lty="dotted")
 par(op)
 invisible(dev.off())
 
