@@ -181,8 +181,8 @@ processChunks() {
     fi
 
     #start barseq.R job and capture the job-id number
-    RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log -t 24:00:00 \
-      $BLARG \
+    RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log \
+      -e ${WORKSPACE}logs/${TAG}.log -t 24:00:00 $BLARG \
       barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
       --maxErr $BCMAXERR --r1 $CHUNK $R2FLAG $LIBRARY)
     JOBID=${RETVAL##* }
