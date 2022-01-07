@@ -38,6 +38,12 @@ p <- add_argument(p, "--rc", help="use reverse complement of reads",flag=TRUE)
 p <- add_argument(p, "--maxErr", help="Maximum allowed number of errors in barcode",default=2L)
 args <- parse_args(p)
 
+# args <- list(
+#   library="../../../libraries/LDLR_R03_subassembly_varcalls_transl.csv",
+#   r1="LDLR_Reg3_Rep1_All_S12_R1_001_acz.fastq",
+#   r2=NA,bcLen=25L,output=NA,flanking="../../tmp/tmp.Zhydu94ePH.fasta",
+#   rc=TRUE, maxErr=2L
+# )
 
 #intended barcode length
 bcLen <- args$bcLen
@@ -112,12 +118,48 @@ cat("hits,diffs,nhits\n",file=outcon)
 cat("Processing FASTQ file.\n")
 progress <- 0
 
-extractBCs <- function(rseqs,flseqs) {
-  starts <- as.vector(regexpr(flseqs[[1]],rseqs)+nchar(flseqs[[1]]))
-  ends <- as.vector(regexpr(flseqs[[2]],rseqs))-1
-  as.vector(mapply(function(str,start,end) {
-    if (start < 0 || end < 0 || end-start+1 != bcLen) NA else substr(str,start,end)
-  },rseqs,starts,ends))
+# extractBCs <- function(rseqs,flseqs,bcLen=25) {
+#   starts <- as.vector(regexpr(flseqs[[1]],rseqs)+nchar(flseqs[[1]]))
+#   ends <- as.vector(regexpr(flseqs[[2]],rseqs))-1
+#   as.vector(mapply(function(str,start,end) {
+#     if (start < 0 || end < 0 || end-start+1 != bcLen) NA_character_ else substr(str,start,end)
+#   },rseqs,starts,ends))
+# }
+
+#extract barcode segments from read sequences
+extractBCs <- function(rseqs,flseqs,bcLen=25) {
+  #iterate over reads
+  sapply(rseqs, function(rseq) {
+    #build suffix tree over read sequence
+    stree <- yogiseq::suffixTree(rseq)
+    #search suffix tree for flanking sequences while allowing N as wildcard
+    startCandidates <- yogiseq::searchSuffixTree(stree,flseqs[[1]],wildcard="N")
+    endCandidates <- yogiseq::searchSuffixTree(stree,flseqs[[2]],wildcard="N")
+
+    # cat("starts:",startCandidates,"ends:",endCandidates,"\n")
+
+    if (length(startCandidates) < 1 || length(endCandidates) < 1) {
+      #no match
+      return(NA_character_)
+    }
+
+    #find start and end candidates at correct distance
+    dists <- do.call(rbind,lapply(startCandidates, function(sc) {
+      endCandidates - sc - nchar(flseqs[[1]])
+    }))
+
+    if (sum(dists==bcLen) != 1) {
+      #ambiguous matches
+      return(NA_character_)
+    }
+
+    idx <- which(dists==bcLen,arr.ind=TRUE)
+    start <- startCandidates[[idx[1,"row"]]]+nchar(flseqs[[1]])
+    end <- endCandidates[[idx[1,"col"]]]-1
+
+    return(substr(rseq,start,end))
+
+  })
 }
 
 exceptions <- yogitools::new.counter()
@@ -132,7 +174,7 @@ while (length(reads <- fqp1$parse.next(100,ignore.quality=TRUE)) > 0) {
   #and convert to simple strings
   rseqs <- sapply(reads,function(ys)ys$toString())
   #extract barcodes
-  bcReads <- extractBCs(rseqs,flseqs)
+  bcReads <- extractBCs(rseqs,flseqs,bcLen=bcLen)
 
 
   #if there's a R2 read, validate and extract as well
