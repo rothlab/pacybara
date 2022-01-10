@@ -130,11 +130,19 @@ progress <- 0
 extractBCs <- function(rseqs,flseqs,bcLen=25) {
   #iterate over reads
   sapply(rseqs, function(rseq) {
-    #build suffix tree over read sequence
-    stree <- yogiseq::suffixTree(rseq)
-    #search suffix tree for flanking sequences while allowing N as wildcard
-    startCandidates <- yogiseq::searchSuffixTree(stree,flseqs[[1]],wildcard="N")
-    endCandidates <- yogiseq::searchSuffixTree(stree,flseqs[[2]],wildcard="N")
+
+    startCandidates <- integer()
+    endCandidates <- integer()
+    tryCatch({
+      #build suffix tree over read sequence
+      stree <- yogiseq::suffixTree(rseq)
+      #search suffix tree for flanking sequences while allowing N as wildcard
+      startCandidates <- yogiseq::searchSuffixTree(stree,flseqs[[1]],wildcard="N")
+      endCandidates <- yogiseq::searchSuffixTree(stree,flseqs[[2]],wildcard="N")
+    },error=function(e) {
+      cat("WARNING: Unable to process read:",rseq,"\n")
+    })
+
 
     # cat("starts:",startCandidates,"ends:",endCandidates,"\n")
 
