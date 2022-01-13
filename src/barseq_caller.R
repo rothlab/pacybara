@@ -39,9 +39,9 @@ p <- add_argument(p, "--maxErr", help="Maximum allowed number of errors in barco
 args <- parse_args(p)
 
 # args <- list(
-#   library="../../../libraries/LDLR_R03_subassembly_varcalls_transl.csv",
-#   r1="LDLR_Reg3_Rep1_All_S12_R1_001_acz.fastq",
-#   r2=NA,bcLen=25L,output=NA,flanking="../../tmp/tmp.Zhydu94ePH.fasta",
+#   library="../libraries/LDLR_R03_subassembly_varcalls_transl.csv",
+#   r1="LDLR_Reg3_Rep1_All_S12_R1_001_aaa.fastq",
+#   r2=NA,bcLen=25L,output=NA,flanking="flanking.fasta",
 #   rc=TRUE, maxErr=2L
 # )
 
@@ -119,8 +119,8 @@ cat("Processing FASTQ file.\n")
 progress <- 0
 
 # extractBCs <- function(rseqs,flseqs,bcLen=25) {
-#   starts <- as.vector(regexpr(flseqs[[1]],rseqs)+nchar(flseqs[[1]]))
-#   ends <- as.vector(regexpr(flseqs[[2]],rseqs))-1
+  # starts <- as.vector(regexpr(flseqs[[1]],rseqs)+nchar(flseqs[[1]]))
+  # ends <- as.vector(regexpr(flseqs[[2]],rseqs))-1
 #   as.vector(mapply(function(str,start,end) {
 #     if (start < 0 || end < 0 || end-start+1 != bcLen) NA_character_ else substr(str,start,end)
 #   },rseqs,starts,ends))
@@ -131,6 +131,19 @@ extractBCs <- function(rseqs,flseqs,bcLen=25) {
   #iterate over reads
   sapply(rseqs, function(rseq) {
 
+    #try simple regex match first
+    start <- as.vector(regexpr(flseqs[[1]],rseq)+nchar(flseqs[[1]]))
+    end <- as.vector(regexpr(flseqs[[2]],rseq))-1
+    if (start >= 0 && end >= 0 && end-start+1 == bcLen) {
+      return(substr(rseq,start,end))
+    }
+
+    #if that didn't work and no Ns exist in the sequence, there's no match
+    if (!grepl("N",rseq)) {
+      return(NA_character_)
+    }
+
+    #othwerwise we'll move to suffix trees with 'N' as wildcards.
     startCandidates <- integer()
     endCandidates <- integer()
     tryCatch({
