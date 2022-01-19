@@ -119,7 +119,7 @@ invisible(dev.off())
 
 
 conds <- sub("\\.allfreq$","",colnames(lrs)[grep("allfreq",colnames(lrs))])
-relCond <- conds[[length(conds)]]
+relCond <- conds[order(conds)][[length(conds)]]
 
 afCol <- paste0(relCond,".allfreq")
 lrCol <- paste0(relCond,".lr")
@@ -138,37 +138,37 @@ synLRs <- hqLRs[isSyn,]
 misLRs <- hqLRs[!(isSyn | hqLRs$codonChanges=="WT" | grepl("Ter",hqLRs$hgvsp) | grepl("fs",hqLRs$aaChanges)),]
 
 
-pdf(paste0(pargs$outdir,"barseqDistributions_UptF5.pdf"),7,6)
+pdf(paste0(pargs$outdir,"barseqDistributions_",relCond,".pdf"),7,6)
 op <- par(mfcol=c(3,2))
 breaks <- seq(-5,5,0.05)
 hist(
   wtLRs[,lrCol],breaks=breaks,
   col="darkolivegreen3",border=NA,main="WT clones",
-  xlab="log10(F4/All)"
+  xlab=sprintf("log10(%s/All)",relCond)
 )
 abline(v=mean(yogitools::fin(wtLRs[,lrCol])),lty="dotted")
 hist(
   stopLRs[,lrCol],breaks=breaks,
   col="firebrick3",border=NA,main="Nonsense clones",
-  xlab="log10(F4/All)"
+  xlab=sprintf("log10(%s/All)",relCond)
 )
 abline(v=mean(yogitools::fin(stopLRs[,lrCol])),lty="dotted")
 hist(
   synLRs[,lrCol],breaks=breaks,
   col="darkolivegreen2",border=NA,main="Synonymous clones",
-  xlab="log10(F4/All)"
+  xlab=sprintf("log10(%s/All)",relCond)
 )
 abline(v=mean(yogitools::fin(synLRs[,lrCol])),lty="dotted")
 hist(
   fsLRs[,lrCol],breaks=breaks,
   col="firebrick4",border=NA,main="Frameshift clones",
-  xlab="log10(F4/All)"
+  xlab=sprintf("log10(%s/All)",relCond)
 )
 abline(v=mean(yogitools::fin(fsLRs[,lrCol])),lty="dotted")
 hist(
   misLRs[,lrCol],breaks=breaks,
   col="gray",border=NA,main="Missense clones",
-  xlab="log10(F4/All)"
+  xlab=sprintf("log10(%s/All)",relCond)
 )
 abline(v=mean(yogitools::fin(misLRs[,lrCol])),lty="dotted")
 par(op)
