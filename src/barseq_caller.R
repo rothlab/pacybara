@@ -107,7 +107,7 @@ if (!is.na(r2File)) {
     con2 <- gzfile(r2File,open="r")
   } else {#if this weren't txt it would have failed above
     con2 <- file(r2File,open="r")
-  } 
+  }
   fqp2 <- new.fastq.parser(con2)
 }
 
@@ -224,7 +224,9 @@ while (length(reads <- fqp1$parse.next(100,ignore.quality=TRUE)) > 0) {
 
 
   #find matches
-  matches <- matcher$findMatches(bcReads,bcReads2)
+  # system.time({
+    matches <- matcher$findMatches(bcReads,bcReads2)
+  # })
 
   #record reasons for rejected reads
   exceptions$add("failedExtraction",sum(naReads))

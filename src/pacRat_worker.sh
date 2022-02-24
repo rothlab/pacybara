@@ -254,7 +254,7 @@ if [[ ! -s "${ALNFILE}_stats" ]]; then
   samtools flagstat "$ALNFILE" > "${ALNFILE}_stats"
   #inspect alignment quality
   samtools view "$ALNFILE" |awk '{ if ($4 == 1) print $6 }' \
-    |sort |uniq -c |sort -nr |head >"${ALNFILE}_topCIGARs"
+    |sort |uniq -c |sort -nr |head >"${ALNFILE}_topCIGARs" || true
 else
   echo "Using existing stats"
 fi
@@ -273,7 +273,8 @@ fi
 if [[ ! -s $EXTRACTFILE ]]; then
   echo "Extracting barcodes..."
   python AssemblyByPacBio/extractBarcodeInsertPairs_moreQC.py "$ALNFILE2" \
-    --length=$BLEN --position=$((BCPOS-1)) --start=$(($ORFSTART-$BLEN-1)) --end=$(($ORFEND-$BLEN)) \
+    --length=$BLEN --position=$((BCPOS-1)) \
+    --start=$(($ORFSTART-$BLEN-1)) --end=$(($ORFEND-$BLEN)) \
     | gzip -c >"$EXTRACTFILE"
   # dieOnError $? !!
 else 

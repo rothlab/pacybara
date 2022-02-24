@@ -27,6 +27,7 @@ p <- arg_parser(
 p <- add_argument(p, "lrs", help="lrs file")
 p <- add_argument(p, "counts", help="counts file")
 p <- add_argument(p, "outdir", help="output directory")
+p <- add_argument(p, "--deCumufy",help="counteract cumulative counts",flag=TRUE)
 pargs <- parse_args(p)
 
 # pargs <- list(lrs="scores/allLRs.csv",counts="counts/allCounts.csv",outdir="qc/")
@@ -201,19 +202,20 @@ failedExtraction <- as.integer(yogitools::extract.groups(excFE,"=(\\d+)$")[,1])
 noMatch <- as.integer(yogitools::extract.groups(excNM,"=(\\d+)$")[,1])
 ambig <- as.integer(yogitools::extract.groups(excAMB,"=(\\d+)$")[,1])
 
-
-# deCumufy <- function(xs) {
-#   sapply(1:length(xs), function(i) {
-#     if (i==1) return(xs[[1]])
-#     else xs[[i]]-sum(xs[[(i-1)]])
-#   })
-# }
-# failedExtraction <- deCumufy(failedExtraction)
-# noMatch <- deCumufy(noMatch)
-# ambig <- deCumufy(ambig)
+if (pargs$deCumufy) {
+  deCumufy <- function(xs) {
+    sapply(1:length(xs), function(i) {
+      if (i==1) return(xs[[1]])
+      else xs[[i]]-sum(xs[[(i-1)]])
+    })
+  }
+  failedExtraction <- deCumufy(failedExtraction)
+  noMatch <- deCumufy(noMatch)
+  ambig <- deCumufy(ambig)
+}
 
 rawCounts <- nmTable[excSampleD,]
-rest <- rawCounts$totalReads-failedExtraction+noMatch+ambig
+rest <- rawCounts$totalReads-(failedExtraction+noMatch+ambig)
 
 pdf(paste0(pargs$outdir,"readFates.pdf"),7,6)
 op <- par(las=3,mar=c(12,4,1,1))

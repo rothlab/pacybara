@@ -298,9 +298,13 @@ for R1FQ in $R1FQS; do
 done
 
 #consolidates all OUTFILEs (*_counts.txt) into "allCounts.csv"
+echo "Consolidating counts from all samples..."
 barseq_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
 
+echo "Calculating enrichment ratios and scores..."
 barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}scores/"
 
 #cleanup temp files
 rm tmp/*&&rmdir tmp
+
+echo "Done!"
