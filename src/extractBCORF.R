@@ -117,7 +117,7 @@ fetchBC <- function(bcGenos,bcID) {
 
 combineBCs <- function(bcGenos) {
   as.df(lapply(bcGenos, function(bg) {
-    if (nrow(bg$barcodes) > 0) {
+    if (!is.null(bg$barcodes) && length(bg$barcodes) > 0 && nrow(bg$barcodes) > 0) {
       with(bg$barcodes,list(
         pos=NA_integer_,
         seq=paste(seq,collapse=""),
@@ -154,6 +154,8 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,bcPoss=c
   #tracker for the number of lines processed
   linesDone <- 0
 
+  cat("Processing SAM file...\n\n")
+
   #main loop for processing stream
   done <- FALSE
   while(!done) {
@@ -175,7 +177,7 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,bcPoss=c
 
     if (!any(passfilter)) {
       linesDone <- linesDone + nlines
-      cat(linesDone,"lines processed\n")
+      cat("\r",linesDone,"lines processed")
       next
     }
 
@@ -223,9 +225,11 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,bcPoss=c
     
     linesDone <- linesDone + nlines
 
-    cat(linesDone,"lines processed\n")
+    cat("\r",linesDone,"lines processed")
 
   }
+
+  cat("\n")
 
   lapply(bcOuts,close)
   close(genoOut)
@@ -261,4 +265,4 @@ processSAMs(pargs$sam,pargs$ref,pargs$outdir,
   chunkSize=pargs$chunkSize,bcLen=pargs$bcLen,bcPoss=bcPoss
 )
 
-cat("Done!\n")
+cat("\nDone!\n")
