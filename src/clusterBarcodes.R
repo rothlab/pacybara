@@ -60,7 +60,7 @@ new.fastClust <- function() {
 
 
 samFile <- "bcMatches.sam.gz"
-fqFile <- "bcExtract_1.fastq.gz"
+fqFile <- "bcPreclust.fastq.gz"
 genoFile <- "genoExtract.csv.gz"
 
 #get barcode read lengths from fastq file
@@ -68,8 +68,10 @@ fqLines <- readLines(fqFile)
 fqLines <- fqLines[seq(1,length(fqLines),4)]
 bcReadName <- yogitools::extract.groups(fqLines,"^@(\\S+) ")[,1]
 dups <- which(duplicated(bcReadName))
-fqLines <- fqLines[-dups]
-bcReadName <- bcReadName[-dups]
+if (length(dups) > 0) {
+  fqLines <- fqLines[-dups]
+  bcReadName <- bcReadName[-dups]
+}
 bcReadLen <- as.integer(yogitools::extract.groups(fqLines,"len=(\\d+)")[,1])
 rm(fqLines,dups)
 bcReadLen <- hash(bcReadName,bcReadLen)

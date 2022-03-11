@@ -20,7 +20,7 @@
 set -euo pipefail -o history -o histexpand
 
 BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
-BCPOS=153
+BCPOS="153,2812"
 ORFSTART=207
 ORFEND=2789
 THREADS=24
@@ -41,7 +41,7 @@ Usage: pacifica_worker.sh [-b|--barcode <BARCODE>] [-p|--barcodePos <BCPOS>]
 
 -b|--barcode   : The barcode degeneracy code sequence, defaults to
                  $BARCODE
--p|--barcodePos: The barcode position, defaults to $BCPOS
+-p|--barcodePos: Comma-separated list of barcode position, defaults to $BCPOS
 -s|--orfStart  : The ORF start position, defaults to $ORFSTART
 -e|--orfEnd    : The ORF end position, defaults to $ORFEND
 -c|--cpus      : Number of CPU cores, defaults to $THREADS
@@ -87,10 +87,10 @@ while (( "$#" )); do
       ;;
     -p|--barcodePos)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $NUMRX ]] ; then
-           echo "ERROR: barcode position must be a positive integer number" >&2
-           usage 1
-        fi
+        # if ! [[ $2 =~ $NUMRX ]] ; then
+        #    echo "ERROR: barcode position must be a positive integer number" >&2
+        #    usage 1
+        # fi
         BCPOS=$2
         shift 2
       else
@@ -211,77 +211,39 @@ else
   echo "Using existing stats"
 fi
 
-
-
-
 #extract barcodes
 if [[ ! -s "${EXTRACTDIR}/bcExtract_1.fastq.gz" ]]; then
   echo "Extracting barcodes..."
-  extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"
-  #calculate barcode length distribution
+  extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\
+    --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
+  #calculate barcode length distributions
   zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
     sort -n|uniq -c>"${EXTRACTDIR}/bc1len_distr.txt"
+  zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
+    sort -n|uniq -c>"${EXTRACTDIR}/bccombolen_distr.txt"
 else 
   echo "Using existing extracted barcodes"
 fi
 
+#pre-clustering
+zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|precluster.py\
+  |gzip -c>"${EXTRACTDIR}/bcPreclust.fastq.gz"
+#record distribution of pre-cluster sizes
+zcat "${EXTRACTDIR}/bcPreclust.fastq.gz"|grep size|cut -f2,2 -d=|\
+  sort -n|uniq -c>"${EXTRACTDIR}/bcPreclust_distr.txt"
 
-#pre-cluster (round brackets force sub-process!)
-# preCluster() (
+#build bowtie index
+seqret -sequence <(zcat "${EXTRACTDIR}/bcPreclust.fastq.gz")\
+  -outseq "${EXTRACTDIR}/bcPreclust.fasta"
+mkdir "${EXTRACTDIR}/db"
+bowtie2-build "${EXTRACTDIR}/bcPreclust.fasta" \
+  "${EXTRACTDIR}/db/bcComboDB"
+rm "${EXTRACTDIR}/bcPreclust.fasta"
 
-#   FQFILE=$1
-
-#   #function to convert character to integer value and vice versa
-#   char2int() {
-#     LC_CTYPE=C printf '%d' "'$1"
-#   }
-#   int2char() {
-#     [ "$1" -lt 256 ] || return 1
-#     printf "\\$(printf '%03o' "$1")"
-#   }
-#   #helper function to extract regex
-#   extractRX() {
-#     if [[ $1 =~ $2 ]]; then
-#       echo ${BASH_REMATCH[1]}
-#     fi
-#   }
-
-#   #create dictionary for barcodes
-#   declare -A BC2READ
-#   declare -A BC2SIZE
-#   declare -A BC2QUAL
-
-#   #read fastq file 4 lines at a time
-#   while mapfile -t -n 4 LINES && ((${#LINES[@]})); do
-#     RID=$(extractRX "${LINES[0]}" "@\S+/([0-9]+)/")
-#     SEQ=${LINES[1]}
-#     QSTR=${LINES[3]}
-
-#     #translate qualities to numbers
-#     QUAL=()
-#     for (( i=0; i<${#QSTR}; i++ )); do
-#       QNUM=$(( $(char2int "${QSTR:$i:1}") -32 ))
-#       QUAL+=($QNUM)
-#     done
-
-#     #add read to hash
-#     BC2READ[${SEQ}]+="${RID},"
-#     ((BC2SIZE[${SEQ}]++))
-
-#   done < <(zcat $FQFILE)
-# )
-
-
-
-
-
-
-seqret -sequence <(zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz")\
-  -outseq "${EXTRACTDIR}/bcExtract_1.fasta"
-bowtie2-build bcExtract_1.fasta db/bc1db
-
-seqret -sequence <(zcat bcExtract_1.fastq.gz) -outseq stdout|bowtie2-build -c db/bc1db
-
+#align all vs all
 bowtie2 --no-head --norc --very-sensitive --all \
--x db/bc1db -U bcExtract_1.fastq.gz 2>/dev/null|\
-awk '{if($1!=$3){print}}'> bcMatches.sam
+  -x "${EXTRACTDIR}/db/bcComboDB" \
+  -U "${EXTRACTDIR}/bcPreclust.fastq.gz" 2>/dev/null\
+  |awk '{if($1!=$3){print}}'|gzip -c> "${EXTRACTDIR}/bcMatches.sam.gz"
+#delete bowtie library files; no longer needed
+rm -r "${EXTRACTDIR}/db"
