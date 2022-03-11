@@ -65,15 +65,17 @@ genoFile <- "genoExtract.csv.gz"
 
 #get barcode read lengths from fastq file
 fqLines <- readLines(fqFile)
-fqLines <- fqLines[seq(1,length(fqLines),4)]
-bcReadName <- yogitools::extract.groups(fqLines,"^@(\\S+) ")[,1]
-dups <- which(duplicated(bcReadName))
-if (length(dups) > 0) {
-  fqLines <- fqLines[-dups]
-  bcReadName <- bcReadName[-dups]
-}
-bcReadLen <- as.integer(yogitools::extract.groups(fqLines,"len=(\\d+)")[,1])
-rm(fqLines,dups)
+headerLines <- fqLines[seq(1,length(fqLines),4)]
+seqLines <- fqLines[seq(2,length(fqLines),4)]
+bcReadName <- yogitools::extract.groups(headerLines,"^@(\\S+) ")[,1]
+bcReadLen <- nchar(seqLines)
+# dups <- which(duplicated(bcReadName))
+# if (length(dups) > 0) {
+#   headerLines <- headerLines[-dups]
+#   bcReadName <- bcReadName[-dups]
+# }
+# bcReadLen <- as.integer(yogitools::extract.groups(headerLines,"len=(\\d+)")[,1])
+rm(fqLines,headerLines,seqLines)
 bcReadLen <- hash(bcReadName,bcReadLen)
 bcReadLen[["*"]] <- NA
 
@@ -93,10 +95,21 @@ while (length(nlines <- stream$nextChunk()) > 0) {
     getFlags()[,c("segmentUnmapped","revComp","failQC")],
     getSamElement(,c("pos","AS","NM"))
   ))
-  rmat$alignLength <- sapply(
+  #num matches/mismatches
+  nMM <- sapply(
     yogitools::global.extract.groups(rmat$cigar,"(\\d+)M"),
     function(ms) sum(as.integer(ms))
   )
+  nIns <- sapply(
+    yogitools::global.extract.groups(rmat$cigar,"(\\d+)I"),
+    function(ms) sum(as.integer(ms),na.rm=TRUE)
+  )
+  nDel <- sapply(
+    yogitools::global.extract.groups(rmat$cigar,"(\\d+)D"),
+    function(ms) sum(as.integer(ms),na.rm=TRUE)
+  )
+  #query and template lengths 
+  queryLen <- values(bcReadLen,rmat$cname)
   tempLen <- values(bcReadLen,rmat$rname)
   rmat$end <- with(rmat,pos-1+alignLength)
   rmat$diffs <- with(rmat,pos-1+NM+(tempLen-end))
