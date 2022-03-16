@@ -247,3 +247,9 @@ bowtie2 --no-head --norc --very-sensitive --all \
   |awk '{if($1!=$3){print}}'|gzip -c> "${EXTRACTDIR}/bcMatches.sam.gz"
 #delete bowtie library files; no longer needed
 rm -r "${EXTRACTDIR}/db"
+
+#calculate edit distance
+calcEdits.R "${EXTRACTDIR}/bcMatches.sam.gz" \
+  "${EXTRACTDIR}/bcPreclust.fastq.gz" --maxError 3 \
+  --output "${EXTRACTDIR}/editDistance.csv.gz"
+
