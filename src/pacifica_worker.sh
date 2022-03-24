@@ -225,7 +225,7 @@ else
   echo "Using existing extracted barcodes"
 fi
 
-#pre-clustering
+#pre-clustering (group fully identical barcode reads)
 zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|precluster.py\
   |gzip -c>"${EXTRACTDIR}/bcPreclust.fastq.gz"
 #record distribution of pre-cluster sizes
@@ -252,4 +252,10 @@ rm -r "${EXTRACTDIR}/db"
 calcEdits.R "${EXTRACTDIR}/bcMatches.sam.gz" \
   "${EXTRACTDIR}/bcPreclust.fastq.gz" --maxError 3 \
   --output "${EXTRACTDIR}/editDistance.csv.gz"
+
+#perform actual clustering and form consensus
+runClustering.R "${EXTRACTDIR}/editDistance.csv.gz" \
+  "${EXTRACTDIR}/genoExtract.csv.gz" "${EXTRACTDIR}/bcPreclust.fastq.gz" \
+  --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
+  --out "${EXTRACTDIR}/clusters.csv.gz"
 

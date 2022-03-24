@@ -2,13 +2,41 @@
 
 library(pbmcapply) 
 library(hash)
+library(yogitools)
+library(yogiseq)
+library(argparser)
+
+p <- arg_parser(
+  "run clustering of barcoded pacbio data",
+  name="runClustering.R"
+)
+p <- add_argument(p, "edFile", help="edit distance csv.gz file")
+p <- add_argument(p, "genoFile", help="genotypes csv.gz file")
+p <- add_argument(p, "preClustFile", help="pre-clustered virtual barcode file")
+p <- add_argument(p, "--uptagBarcodeFile", help="up-tag barcode fastq.gz file")
+p <- add_argument(p, "--minJaccard",help="minimum jaccard cofficient to merge clusters",default=0.2)
+p <- add_argument(p, "--minMatches",help="minimum number of variant matches to merge clusters",default=1L)
+p <- add_argument(p, "--maxDiff",help="maxiumum allowed edit distance between barcodes",default=2L)
+p <- add_argument(p, "--minQual", help="minimum variant Q-score to be accepted as real variant.",default=100L)
+p <- add_argument(p, "--out", help="output file (csv.gz)",default="clusters.csv.gz")
+args <- parse_args(p)
+
+edFile <- args$edFile
+genoFile <- args$genoFile
+preClustFile <- args$preClustFile
+uptagFile <- args$uptagBarcodeFile
+maxDiff <- args$maxDiff
+minJaccard <- args$minJaccard
+minMatches <- args$minMatches
+minQual <- args$minQual
+outfile <- args$out
 
 #function composition operator
 `%o%` <- function(f,g) {
   function(...) g(f(...))
 }
 
-new.fastClust <- function(maxRatio=2,minJaccard=0.8,maxDiff=3) {
+new.fastClust <- function(minJaccard=0.3) {
 
   knownPairs <- hash()
   cl2members <- hash()
@@ -27,14 +55,14 @@ new.fastClust <- function(maxRatio=2,minJaccard=0.8,maxDiff=3) {
     has.key(pairID(id1,id2),knownPairs)
   }
   clusterOf <- function(id) {
-    if (has.key(id,member2cl)) {
+    if (hash::has.key(id,member2cl)) {
       member2cl[[id]]
     } else {
       sentinel
     }
   }
   membersOf <- function(clID) {
-    if (has.key(clID,cl2members)) {
+    if (hash::has.key(clID,cl2members)) {
       cl2members[[clID]]
     } else {
       character(0)
@@ -43,13 +71,20 @@ new.fastClust <- function(maxRatio=2,minJaccard=0.8,maxDiff=3) {
   suggestMerge <- function(id1,id2,bcDist,genoDist,jaccard) {
     clID1 <- clusterOf(id1)
     clID2 <- clusterOf(id2)
-    size1 <- length(membersOf(clID1))
-    size2 <- length(membersOf(clID2))
+    size1 <- max(length(membersOf(clID1)),1)
+    size2 <- max(length(membersOf(clID2)),1)
     totalDist <- bcDist+genoDist
-    sizeRatio <- max(size1,size2)/min(size1,size2)
 
-    if ((genoDist <= maxDiff && jaccard >= minJaccard) && 
-         (totalDist == 0 || max(size1,size2) < 4 || sizeRatio <= maxRatio)) {
+    #size disproportion. 0 = equal, 1 = double, 2 = quadruple
+    sizeDispro <- abs(log2(size1/size2))
+    #total edit distance = 0: accept
+    #total ED 1: Min. dispro 0.25?
+    #total ED 2: Min. dispro 0.5
+    #total ED 3: Min. dispro 1?
+    #total ED 4: reject
+    sizeCriterion <- max(size1,size2) <= 4 || sizeDispro >= 2^(bcDist-3)
+
+    if (totalDist == 0 || (sizeCriterion && jaccard >= minJaccard)) {
       acceptMerge(id1,id2,bcDist,genoDist,jaccard)
     } else {
       rejectMerge(id1,id2,bcDist,genoDist,jaccard)
@@ -124,29 +159,77 @@ new.fastClust <- function(maxRatio=2,minJaccard=0.8,maxDiff=3) {
     suggestMerge=suggestMerge,
     acceptMerge=acceptMerge,
     rejectMerge=rejectMerge,
-    getClusters=function() cl2members
+    getClusters=function() cl2members,
+    getMembersOf=membersOf,
+    getClusterOf=function(id) {
+        if (has.key(id,member2cl)) {
+        member2cl[[id]]
+      } else {
+        NA
+      }
+    }
   )
 }
 
-# fc <- new.fastClust()
-# fc$acceptMerge("foo","bar",0,0,1)
-# fc$acceptMerge("foo","baz",0,0,1)
-# fc$acceptMerge("aaa","bbb",0,0,1)
-# fc$acceptMerge("foo","aaa",0,0,1)
+# Helper function to build variant matrix for list of read IDs
+toVarMatrix <- function(ids) {
+  gl <- genoList[ids]
+  if (length(ids) > 1) {
+    suppressWarnings({
+      Reduce(function(x,y) merge(x,y,by="var",all=TRUE), gl)
+    })
+  } else {
+    gl[[1]]
+  }
+}
 
-edFile <- "editDistance.csv.gz"
-genoFile <- "genoExtract.csv.gz"
+#Helper function to lookup any existin clusters for a read and build the
+# genotype matrix
+getClusterVarMatrix <- function(rid) {
+  with(fastclust, {
+    clid <- getClusterOf(rid)
+    if (!is.na(clid)) {
+      getMembersOf(clid) |> toVarMatrix()
+    } else {
+      rid |> toVarMatrix()
+    }
+  })
+}
 
+cat("Loading barcode files\n")
+
+#LOAD BARCODES AND EXTRACT PRE-CLUSTERS
+loadBarcodes <- function(preClustFile) {
+  fqLines <- readLines(preClustFile)#yes, this automatically deals with gzip
+  headerLines <- fqLines[seq(1,length(fqLines),4)]
+  seqLines <- fqLines[seq(2,length(fqLines),4)]
+  bcReadName <- yogitools::extract.groups(headerLines,"^@(\\S+) ")[,1]
+  setNames(seqLines,bcReadName)
+}
+barcodes <- loadBarcodes(preClustFile)
+preClustsAll <- names(barcodes)|>strsplit("\\|")
+preClusts <- preClustsAll[sapply(preClustsAll,length) > 1]
+
+if (!is.na(uptagFile)){
+  uptags <- loadBarcodes(uptagFile)
+} else {
+  uptags <- NA
+}
+
+
+#LOAD GENOTYPES AND EDIT DISTANCES
 csvgz <- function(filename,header=TRUE) {
   con <- gzfile(filename,open="r")
   on.exit({close(con)})
   return(read.csv(con,header=header))
 }
-
+cat("Loading edit distance file\n")
+edist <- csvgz(edFile)
+cat("Loading genotypes\n")
 genos <- csvgz(genoFile,header=FALSE)
 genos <- setNames(genos[,2],genos[,1])
 #parse genos into list of dataframes
-genoList <- pbmclapply(strsplit(genos,";"),function(gs) {
+genoList <- strsplit(genos,";")|>pbmclapply(function(gs) {
   if (all(gs=="=")) {
     return(data.frame(var=character(0),qual=numeric(0)))
   }
@@ -154,44 +237,40 @@ genoList <- pbmclapply(strsplit(genos,";"),function(gs) {
   data.frame(var=sapply(l,`[[`,1),qual=as.numeric(sapply(l,`[[`,2)))
 },mc.cores=8)
 
-edist <- csvgz(edFile)
-
-#get list of (distance-0) pre-clusters
-preIDs <- unique(c(edist$ref,edist$edist$query))
-preClusts <- strsplit(preIDs,"\\|")
-preClusts <- preClusts[sapply(preClusts,length) > 1]
+cat("Clustering\n")
 
 #create cluster object
 fastclust <- new.fastClust()
 
-# invisible(lapply(preClusts,function(ids) {
-#   apply(combn(ids,2),2,function(idpair) {
-#     judgeConnection(idpair[[1]],idpair[[2]],0)
-#   })
-# }))
-
-minMatches <- 1
-minJaccard <- 0.2
-
-#examine seed cluster candidates
+#FIND SEED CLUSTERS
 preClusts |> lapply(function(ids) {
-  gl <- genoList[ids]
-  varMatrix <- Reduce(function(x,y) merge(x,y,by="var",all=TRUE), gl)
+  varMatrix <- toVarMatrix(ids)
   #remove putative sequencing errors
   # - Observed only once, with qual < 100
   observations <- apply(varMatrix[,-1], 1, (is.na %o% `!` %o% sum))
   totalQual <- apply(varMatrix[,-1], 1, sum, na.rm=TRUE)
-  varMatrix <- varMatrix[which(observations > 1 | totalQual > 100),]
+  varMatrix <- varMatrix[which(observations > 1 | totalQual > minQual),]
   #pick subclusters
   for (i in 2:length(ids)) {
     for (j in 1:(i-1)) {
       vars1 <- !is.na(varMatrix[,i+1])
       vars2 <- !is.na(varMatrix[,j+1])
+      totVar <- sum(vars1 | vars2)
+      if (totVar == 0) {#both WT
+        fastclust$acceptMerge(ids[[i]],ids[[j]],
+          bcDist=0,genoDist=0,jaccard=1
+        )
+        next
+      }
       matches <- sum(vars1 & vars2)
       mismatches <- sum(xor(vars1,vars2))
-      jaccard <- matches/sum(vars1 | vars2)
+      jaccard <- if (totVar > 0) matches/totVar else 1
       if (matches >= minMatches && jaccard >= minJaccard) {
         fastclust$acceptMerge(ids[[i]],ids[[j]],
+          bcDist=0,genoDist=mismatches,jaccard=jaccard
+        )
+      } else {
+        fastclust$rejectMerge(ids[[i]],ids[[j]],
           bcDist=0,genoDist=mismatches,jaccard=jaccard
         )
       }
@@ -205,10 +284,43 @@ judgeConnection <- function(id1,id2,bcDist) {
     return()
   }
   #check if they are are already part of clusters
-  varMatrix1 <- with(fastclust, getClusterOf(id1) |> getMembersOf() |> toVarMatrix())
-  varMatrix2 <- with(fastclust, getClusterOf(id1) |> getMembersOf() |> toVarMatrix())
-  #extract the genotypes
-  genoPair <- genoList[c(id1,id2)]
+  varMatrix1 <- getClusterVarMatrix(id1)
+  varMatrix2 <- getClusterVarMatrix(id2)
+
+  #cluster sizes
+  clSize1 <- ncol(varMatrix1)-1
+  clSize2 <- ncol(varMatrix2)-1
+
+  #test effects of possible merger
+  combinedMatrix <- suppressWarnings({
+    merge(varMatrix1,varMatrix2,by="var",all=TRUE)
+  })
+  #remove putative seq errors
+  observations <- apply(combinedMatrix[,-1], 1, (is.na %o% `!` %o% sum))
+  totalQual <- apply(combinedMatrix[,-1], 1, sum, na.rm=TRUE)
+  combinedMatrix <- combinedMatrix[which(observations > 1 | totalQual > minQual),]
+  
+  # print(combinedMatrix)
+
+  # #extract surviving variants from both sides
+  vars1 <- combinedMatrix[,(1:clSize1)+1,drop=FALSE] |> apply(1, is.na %o% `!` %o% any)
+  vars2 <- !is.na(combinedMatrix[,clSize1+2])
+  totVar <- sum(vars1 | vars2)
+      
+  if (totVar == 0) {#both WT 
+    totDist <- bcDist
+    fastclust$suggestMerge(id1,id2,
+      bcDist=bcDist,genoDist=0,jaccard=1
+    )
+  } else {
+    matches <- sum(vars1 & vars2)
+    mismatches <- sum(xor(vars1,vars2))
+    jaccard <- if (totVar > 0) matches/totVar else 1
+    # cat(sprintf("%d matches; %d mismatches; jaccard=%.03f\n\n",matches,mismatches,jaccard))
+    fastclust$suggestMerge(id1,id2,
+      bcDist=bcDist,genoDist=mismatches,jaccard=jaccard
+    )
+  }
 }
 
 #Iteratively step through connections with greater barcode differences
@@ -221,71 +333,213 @@ for (bcDist in 1:maxDiff) {
         judgeConnection(id1,id2,bcDist)
       }
     }
-
   }) |> invisible()
 }
 
 
+#CALCULATE CONSENSUS GENOTYPES
+cat("Calculating consensus genotypes\n")
 
-# judgeConnection <- function(id1,id2,bcDist) {
+clusterGenos <- fastclust$getClusters()|>as.list()|>pbmclapply(function(members) {
+  varMatrix <- toVarMatrix(members)
+  #remove "obvious" sequencing error
+  observations <- apply(varMatrix[,-1], 1, (is.na %o% `!` %o% sum))
+  totalQual <- apply(varMatrix[,-1], 1, sum, na.rm=TRUE)
+  varMatrix <- varMatrix[which(observations > 1 | totalQual > minQual),]
+  #if no variants survive, we're done
+  if (nrow(varMatrix)==0) {
+    return("=")
+  } 
+  #assign WT voting weights
+  vars <- varMatrix$var
+  weights <- as.matrix(varMatrix[,-1])
+  weights[is.na(weights)] <- -minQual
+  #filter based on votes
+  passFilter <- rowSums(weights) > 0
+  # if (any(!passFilter)) {
+  #   print(varMatrix)
+  # }
+  #if no variants survive, we're done
+  if (sum(passFilter)==0) {
+    return("=")
+  }
+  #sort the rest and output
+  passedVars <- vars[passFilter]
+  poss <- as.integer(yogitools::extract.groups(passedVars,"^(\\d+)"))
+  # poss <- as.integer(sub("\\D+","",varMatrix$var))
+  return(paste(passedVars[order(poss)],collapse=";"))
+},mc.cores=8)|>unlist()
+
+
+#CALCULATE CONSENSUS BARCODES
+
+#helper function to calculate a consensus sequence via MUSCLE
+alignmentConsensus <- function(bcs) {
+  fastaFile <- tempfile()
+  alnFile <- tempfile()
+  con <- file(fastaFile,open="w")
+  yogiseq::writeFASTA(con,bcs)
+  close(con)
+  retVal <- system2("muscle",
+    args=c(
+      "-in",fastaFile,
+      "-out",alnFile
+    ),
+    stdout=FALSE,
+    stderr=FALSE
+  )
+  if (retVal == 0) {
+    con <- file(alnFile,open="r")
+    alnLines <- yogiseq::readFASTA(con)|>sapply(function(x)x$toString())
+    close(con)
+    out <- paste(sapply(1:nchar(alnLines[[1]]), function(i) {
+      contab <- table(substr(alnLines,i,i))
+      outchar <- names(which.max(contab))
+      if (outchar == "-") "" else outchar
+    }),collapse="")
+  } else {
+    out <- "alignment_error"
+  }
+  file.remove(fastaFile,alnFile)
+  return(out)
+}
+
+calcConsensus <- function(rid2bc) {
+  fastclust$getClusters()|>as.list()|>sapply(function(members) {
+    bcs <- values(rid2bc,members)
+    contable <- table(bcs)
+    if (sum(contable==max(contable))==1) {
+      return(names(which.max(contable)))
+    } else {
+      return(alignmentConsensus(bcs))
+    }
+  })
+}
+
+cat("Calculating consensus barcodes\n")
+
+#Calc consensus for virtual barcodes
+rid2bc <- hash(
+  preClustsAll|>unlist(),
+  lapply(1:length(barcodes),function(i) rep(barcodes[[i]],length(preClustsAll[[i]]))) |>unlist()
+)
+bcConsensus <- calcConsensus(rid2bc)
+
+#Calc consensus for uptags if available)
+if (!is.na(uptags[[1]])) {
+  rid2bc <- hash(names(uptags),uptags)
+  upConsensus <- calcConsensus(rid2bc)
+} else {
+  upConsensus <- NA_character_
+}
+#delete index hash to save memory
+rm(rid2bc)
+
+
+cat("Compiling results\n")
+
+#identify singleton reads
+clusteredReadIdx <- hash(fastclust$getClusters()|>as.list()|>unlist(),TRUE)
+allReads <- unlist(preClustsAll)
+singletonReads <- allReads[which(sapply(
+  allReads,
+  function(rid) is.null(clusteredReadIdx[[rid]])
+))]
+singletonGenos <- genoList[singletonReads]|>sapply(function(tbl){
+  if (nrow(tbl)==0) return("=")
+  outvar <- with(tbl,var[qual >= minQual])
+  if (length(outvar)==0) return("=")
+  return(paste(outvar,collapse=";"))
+})
+
+#build output table
+out1 <- lapply(names(clusterGenos),function(cname) {
+  rids <- fastclust$getClusters()[[cname]]
+  list(
+    virtualBarcode=bcConsensus[[cname]],
+    upBarcode=if(is.na(upConsensus[[1]])) NA_character_ else upConsensus[[cname]],
+    reads=paste(rids,collapse="|"),
+    size=length(rids),
+    geno=clusterGenos[cname]
+  )
+})|>yogitools::as.df()
+out2 <- data.frame(
+  virtualBarcode=barcodes[singletonReads],
+  upBarcode=if(is.na(uptags[[1]])) NA_character_ else uptags[singletonReads],
+  reads=singletonReads,
+  size=1,
+  geno=singletonGenos
+)
+out <- rbind(out1,out2)
+
+cat("Tagging barcode collisions\n")
+
+#check for barcode collisions
+tagDups <- function(bcs) {
+  contab <- table(bcs)
+  dupIdx <- hash(names(which(contab > 1)),TRUE)
+  bcs|>sapply(function(bc) if (is.null(dupIdx[[bc]])) "" else "collision")
+}
+out$collision <- tagDups(out$virtualBarcode)
+if (!is.na(uptagFile)) {
+  out$upTagCollision <- tagDups(out$upBarcode)
+}
+
+cat("Writing output to file\n")
+
+#write output to file
+outcon <- gzfile(outfile,open="w")
+write.csv(out,outcon,row.names=FALSE)
+close(outcon)
+
+# inspectConnection <- function(id1,id2,bcDist) {
 #   #if the pairing was already previously examined, we can skip it
 #   if (fastclust$isKnown(id1,id2)) {
 #     return()
 #   }
-#   #extract the genotypes
-#   genoPair <- genoList[c(id1,id2)]
-#   allVars <- union(genoPair[[1]][,1],genoPair[[2]][,1])
-#   if (length(allVars) == 0) {
-#     #both are WT
-#     fastclust$suggestMerge(
-#       id1,id2,
-#       bcDist=bcDist,genoDist=0,jaccard=1
-#     )
-#     return()
+#   #check if they are are already part of clusters
+#   varMatrix1 <- getClusterVarMatrix(id1)
+#   varMatrix2 <- getClusterVarMatrix(id2)
+
+#   #cluster sizes
+#   clSize1 <- ncol(varMatrix1)-1
+#   clSize2 <- ncol(varMatrix2)-1
+
+#   #test effects of possible merger
+#   combinedMatrix <- suppressWarnings({
+#     merge(varMatrix1,varMatrix2,by="var",all=TRUE)
+#   })
+#   #remove putative seq errors
+#   observations <- apply(combinedMatrix[,-1], 1, (is.na %o% `!` %o% sum))
+#   totalQual <- apply(combinedMatrix[,-1], 1, sum, na.rm=TRUE)
+#   combinedMatrix <- combinedMatrix[which(observations > 1 | totalQual > minQual),]
+  
+#   print(combinedMatrix)
+
+#   # #extract surviving variants from both sides
+#   vars1 <- combinedMatrix[,(1:clSize1)+1,drop=FALSE] |> apply(1, is.na %o% `!` %o% any)
+#   vars2 <- !is.na(combinedMatrix[,clSize1+2])
+#   totVar <- sum(vars1 | vars2)
+      
+#   if (totVar > 0) {
+#     matches <- sum(vars1 & vars2)
+#     mismatches <- sum(xor(vars1,vars2))
+#     jaccard <- if (totVar > 0) matches/totVar else 1
+#     cat(sprintf(
+#       "%d matches; %d mismatches; jaccard=%.03f\n\n",
+#       matches,mismatches,jaccard
+#     ))
 #   }
-#   #get list of matching variants
-#   matches <- intersect(genoPair[[1]][,1],genoPair[[2]][,1])
-#   mismatches <- setdiff(allVars,matches)
-#   jaccard <- length(matches)/length(allVars)
-#   # if (length(mismatches) <= maxDiff && jaccard >= minJaccard) {
-#     fastclust$suggestMerge(
-#       id1,id2,
-#       bcDist=bcDist,genoDist=length(mismatches),jaccard=jaccard
-#     )
-#   # } else {
-#   #   fastclust$rejectMerge(
-#   #     id1,id2,
-#   #     bcDist=bcDist,genoDist=length(mismatches),jaccard=jaccard
-#   #   )
-#   # }
-#   return()
 # }
 
-# for (bcDist in 1:maxDiff) {
-#   invisible(apply(edist[edist$dist==bcDist,1:2],1,function(pair) {
-#     #the pair of pre-clusters still needs to be resolved into a list of reads
-#     ids <- strsplit(pair,"\\|")
-#     for (id1 in ids[[1]]) {
-#       for (id2 in ids[[2]]) {
-#         judgeConnection(id1,id2,bcDist)
-#       }
+# bcDist<-2
+# edist[edist$dist==bcDist,1:2] |> head() |> apply(1, function(pair) {
+#   #the pair of pre-clusters still needs to be resolved into a list of reads
+#   ids <- strsplit(pair,"\\|")
+#   for (id1 in ids[[1]]) {
+#     for (id2 in ids[[2]]) {
+#       inspectConnection(id1,id2,bcDist)
 #     }
-#   }))
-# }
+#   }
+# }) |> invisible()
 
-
-
-# foo <- lapply(head(preClusts,50),function(ids) {
-#   gl <- genoList[ids]
-#   out <- Reduce(function(x,y) merge(x,y,by="var",all=TRUE), gl)
-#   colnames(out) <- c("var",paste0("qual",1:(ncol(out)-1)))
-#   out
-# })
-
-# dir.create("export")
-# con <- file("export/export.csv",open="w")
-# for (i in 1:length(foo)) {
-#   write.table(foo[[i]],con,na="",row.names=FALSE)
-#   cat("\n\n",file=con)
-# }
-# close(con)
