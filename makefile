@@ -18,5 +18,5 @@
 PREFIX := ${HOME}/bin/
 
 install: 
-	cp src/*sh src/*R ${PREFIX}
+	cp src/*sh src/*R src/*.py ${PREFIX}
 

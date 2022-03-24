@@ -136,6 +136,9 @@ else
   RCARG=""
 fi
 
+#TODO:
+#Check that sample names in parameter sheet match fastq names!
+
 #Create output directory for this run
 WORKSPACE=${TITLE}_$(date +%Y%m%d_%H%M%S)/
 mkdir "$WORKSPACE"
