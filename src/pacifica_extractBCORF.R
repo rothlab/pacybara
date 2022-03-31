@@ -263,10 +263,12 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
           as.integer(round(mean(as.integer(charToRaw(q)))))
         )
         muts <- sapply(1:nrow(bg$genotype), function(i) with(bg$genotype[i,],{
+          #convert reference position to relative position (wrt ORF)
+          relpos <- refpos-orfStart+1
           switch(op,
-            sub=sprintf("%d%s>%s:%d",refpos,refbase,readbase,qualNum[[i]]),
-            ins=sprintf("%dins%s:%d",refpos,readbase,qualNum[[i]]),
-            del=sprintf("%ddel:%d",refpos,qualNum[[i]])
+            sub=sprintf("%d%s>%s:%d",relpos,refbase,readbase,qualNum[[i]]),
+            ins=sprintf("%dins%s:%d",relpos,readbase,qualNum[[i]]),
+            del=sprintf("%ddel:%d",relpos,qualNum[[i]])
           )
         }))
         paste(muts,collapse=";")
