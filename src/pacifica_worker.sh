@@ -193,8 +193,9 @@ EXTRACTDIR="${WORKSPACE}alignments/${OUTPREFIX}_extract/"
 #align to template
 if [[ ! -s "$ALNFILE" ]]; then
   echo "Running alignment..."
-  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -u - \
-    | samtools sort -o "$ALNFILE" - 
+  # bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -u - \
+  #   | samtools sort -o "$ALNFILE" - 
+  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
   # dieOnError $? !!
 else
   echo "Using existing alignment"
@@ -214,7 +215,7 @@ fi
 #extract barcodes
 if [[ ! -s "${EXTRACTDIR}/bcExtract_1.fastq.gz" ]]; then
   echo "Extracting barcodes..."
-  extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\
+  pacifica_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\
     --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
   #calculate barcode length distributions
   zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
@@ -226,7 +227,7 @@ else
 fi
 
 #pre-clustering (group fully identical barcode reads)
-zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|precluster.py\
+zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacifica_precluster.py\
   |gzip -c>"${EXTRACTDIR}/bcPreclust.fastq.gz"
 #record distribution of pre-cluster sizes
 zcat "${EXTRACTDIR}/bcPreclust.fastq.gz"|grep size|cut -f2,2 -d=|\
@@ -249,12 +250,12 @@ bowtie2 --no-head --norc --very-sensitive --all \
 rm -r "${EXTRACTDIR}/db"
 
 #calculate edit distance
-calcEdits.R "${EXTRACTDIR}/bcMatches.sam.gz" \
+pacifica_calcEdits.R "${EXTRACTDIR}/bcMatches.sam.gz" \
   "${EXTRACTDIR}/bcPreclust.fastq.gz" --maxError 3 \
   --output "${EXTRACTDIR}/editDistance.csv.gz"
 
 #perform actual clustering and form consensus
-runClustering.R "${EXTRACTDIR}/editDistance.csv.gz" \
+pacifica_runClustering.R "${EXTRACTDIR}/editDistance.csv.gz" \
   "${EXTRACTDIR}/genoExtract.csv.gz" "${EXTRACTDIR}/bcPreclust.fastq.gz" \
   --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
   --out "${EXTRACTDIR}/clusters.csv.gz"
