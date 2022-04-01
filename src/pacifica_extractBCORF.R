@@ -193,114 +193,122 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
 
   #main loop for processing stream
   done <- FALSE
-  while(!done) {
+  tryCatch({
+    while(!done) {
 
-    #load next chunk in the stream
-    nlines <- stream$nextChunk()
-    if (nlines==0) {
-      break
-    }
-    #check if we've reached the end of the stream
-    if (nlines < chunkSize) {
-      done <- TRUE
-    }
+      #load next chunk in the stream
+      nlines <- stream$nextChunk()
+      if (nlines==0) {
+        break
+      }
+      #check if we've reached the end of the stream
+      if (nlines < chunkSize) {
+        done <- TRUE
+      }
 
-    #vector of line numbers
-    # lineNums <- linesDone + (1:nlines)
-    flags <- stream$getFlags()
-    passfilter <- with(flags, !segmentUnmapped & !revComp & !failQC & !secondary)
-    exceptions$add("failQC",sum(!passfilter))
+      #vector of line numbers
+      # lineNums <- linesDone + (1:nlines)
+      flags <- stream$getFlags()
+      passfilter <- with(flags, !segmentUnmapped & !revComp & !failQC & !secondary)
+      exceptions$add("failQC",sum(!passfilter))
 
-    #check whether reads cover the entire range of barcodes and ORF
-    matchRanges <- extractMatchRanges(stream)
-    inRange <- matchRanges[,1] <= minRange[[1]] & matchRanges[,2] >= minRange[[2]]
-    inRange[is.na(inRange)] <- FALSE
-    exceptions$add("insufficientCoverage",sum(!inRange & passfilter))
-    passfilter <- passfilter & inRange
+      #if nothing passes filter, skip to next chunk
+      if (!any(passfilter)) {
+        linesDone <- linesDone + nlines
+        cat("\r",linesDone,"lines processed")
+        next
+      }
+      
+      #check whether reads cover the entire range of barcodes and ORF
+      matchRanges <- extractMatchRanges(stream)
+      inRange <- matchRanges[,1] <= minRange[[1]] & matchRanges[,2] >= minRange[[2]]
+      inRange[is.na(inRange)] <- FALSE
+      exceptions$add("insufficientCoverage",sum(!inRange & passfilter))
+      passfilter <- passfilter & inRange
 
-    #if nothing passes filter, skip to next chunk
-    if (!any(passfilter)) {
-      linesDone <- linesDone + nlines
-      cat("\r",linesDone,"lines processed")
-      next
-    }
+      #if nothing passes filter, skip to next chunk
+      if (!any(passfilter)) {
+        linesDone <- linesDone + nlines
+        cat("\r",linesDone,"lines processed")
+        next
+      }
 
-    rIDs <-  stream$getSamElement(,"cname")
-    rIDs <- rIDs[passfilter]
+      rIDs <-  stream$getSamElement(,"cname")
+      rIDs <- rIDs[passfilter]
 
-    #extract variant call candidates
-    #barcodes will appear as long insertions
-    baseCalls <- extractBasecalls(stream,passfilter)
+      #extract variant call candidates
+      #barcodes will appear as long insertions
+      baseCalls <- extractBasecalls(stream,passfilter)
 
-    #list of corrected barcode-genotype associations
-    bcGenos <- lapply(1:length(baseCalls), function(i) {
-      separateBCs(baseCalls[[i]],bcLen,bcPoss,refSeq)
-    })
+      #list of corrected barcode-genotype associations
+      bcGenos <- lapply(1:length(baseCalls), function(i) {
+        separateBCs(baseCalls[[i]],bcLen,bcPoss,refSeq)
+      })
 
-    #check if barcodes were found
-    numBCFound <- sapply(bcGenos,function(x) {
-      if (is.null(x) || !("barcodes" %in% names(x))) return(0) 
-      else nrow(x$barcodes)
-    })
-    missingBC <- numBCFound < length(bcPoss)
-    #remove entries with missing barcodes
-    if (any(missingBC)) {
-      exceptions$add("missingBarcode",sum(missingBC))
-      rIDs <- rIDs[which(!missingBC)]
-      bcGenos <- bcGenos[which(!missingBC)]
-    }
-    #if no barcodes were found, skip to next chunk
-    if (all(missingBC)) {
-      linesDone <- linesDone + nlines
-      cat("\r",linesDone,"lines processed")
-      next
-    }
+      #check if barcodes were found
+      numBCFound <- sapply(bcGenos,function(x) {
+        if (is.null(x) || !("barcodes" %in% names(x))) return(0) 
+        else nrow(x$barcodes)
+      })
+      missingBC <- numBCFound < length(bcPoss)
+      #remove entries with missing barcodes
+      if (any(missingBC)) {
+        exceptions$add("missingBarcode",sum(missingBC))
+        rIDs <- rIDs[which(!missingBC)]
+        bcGenos <- bcGenos[which(!missingBC)]
+      }
+      #if no barcodes were found, skip to next chunk
+      if (all(missingBC)) {
+        linesDone <- linesDone + nlines
+        cat("\r",linesDone,"lines processed")
+        next
+      }
 
-    #write barcodes to output streams
-    for (bcID in 1:length(bcPoss)) {
-      bcs <- cbind(read=rIDs,fetchBC(bcGenos,bcID))
-      cat(toFASTQ(bcs),"\n",file=bcOuts[[bcID]],sep="")
-    }
-    comboBCs <- cbind(read=rIDs,combineBCs(bcGenos))
-    cat(toFASTQ(comboBCs),"\n",file=bcComboOut,sep="")
+      #write barcodes to output streams
+      for (bcID in 1:length(bcPoss)) {
+        bcs <- cbind(read=rIDs,fetchBC(bcGenos,bcID))
+        cat(toFASTQ(bcs),"\n",file=bcOuts[[bcID]],sep="")
+      }
+      comboBCs <- cbind(read=rIDs,combineBCs(bcGenos))
+      cat(toFASTQ(comboBCs),"\n",file=bcComboOut,sep="")
 
-    #construct genotype descriptor strings (based on HGVS syntax)
-    genoStrs <- sapply(bcGenos,function(bg) {
-      if (!is.null(bg$genotype) && nrow(bg$genotype) > 0) {
-        qualNum <- sapply(bg$genotype$qual,function(q) 
-          as.integer(round(mean(as.integer(charToRaw(q)))))
-        )
-        muts <- sapply(1:nrow(bg$genotype), function(i) with(bg$genotype[i,],{
-          #convert reference position to relative position (wrt ORF)
-          relpos <- refpos-orfStart+1
-          switch(op,
-            sub=sprintf("%d%s>%s:%d",relpos,refbase,readbase,qualNum[[i]]),
-            ins=sprintf("%dins%s:%d",relpos,readbase,qualNum[[i]]),
-            del=sprintf("%ddel:%d",relpos,qualNum[[i]])
+      #construct genotype descriptor strings (based on HGVS syntax)
+      genoStrs <- sapply(bcGenos,function(bg) {
+        if (!is.null(bg$genotype) && nrow(bg$genotype) > 0) {
+          qualNum <- sapply(bg$genotype$qual,function(q) 
+            as.integer(round(mean(as.integer(charToRaw(q)))))
           )
-        }))
-        paste(muts,collapse=";")
-      } else "="
-    })
-    #write genotypes to output file
-    write.table(
-      data.frame(read=rIDs,geno=genoStrs), genoOut, 
-      sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE
-    )
-    
-    linesDone <- linesDone + nlines
+          muts <- sapply(1:nrow(bg$genotype), function(i) with(bg$genotype[i,],{
+            #convert reference position to relative position (wrt ORF)
+            relpos <- refpos-orfStart+1
+            switch(op,
+              sub=sprintf("%d%s>%s:%d",relpos,refbase,readbase,qualNum[[i]]),
+              ins=sprintf("%dins%s:%d",relpos,readbase,qualNum[[i]]),
+              del=sprintf("%ddel:%d",relpos,qualNum[[i]])
+            )
+          }))
+          paste(muts,collapse=";")
+        } else "="
+      })
+      #write genotypes to output file
+      write.table(
+        data.frame(read=rIDs,geno=genoStrs), genoOut, 
+        sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE
+      )
+      
+      linesDone <- linesDone + nlines
 
-    cat("\r",linesDone,"lines processed")
+      cat("\r",linesDone,"lines processed")
 
-  }
+    }
+    cat("\n")
+  },finally={
+    cat(exceptions$export(),"\n",file=paste(outdir,"/bcExtract_exceptions.txt"))
+    lapply(bcOuts,close)
+    close(bcComboOut)
+    close(genoOut)
+  })
 
-  cat("\n")
-
-  cat(exceptions$export(),"\n")
-
-  lapply(bcOuts,close)
-  close(bcComboOut)
-  close(genoOut)
 
 }
 
