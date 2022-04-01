@@ -218,6 +218,7 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
     exceptions$add("insufficientCoverage",sum(!inRange & passfilter))
     passfilter <- passfilter & inRange
 
+    #if nothing passes filter, skip to next chunk
     if (!any(passfilter)) {
       linesDone <- linesDone + nlines
       cat("\r",linesDone,"lines processed")
@@ -242,10 +243,17 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
       else nrow(x$barcodes)
     })
     missingBC <- numBCFound < length(bcPoss)
+    #remove entries with missing barcodes
     if (any(missingBC)) {
       exceptions$add("missingBarcode",sum(missingBC))
       rIDs <- rIDs[which(!missingBC)]
       bcGenos <- bcGenos[which(!missingBC)]
+    }
+    #if no barcodes were found, skip to next chunk
+    if (all(missingBC)) {
+      linesDone <- linesDone + nlines
+      cat("\r",linesDone,"lines processed")
+      next
     }
 
     #write barcodes to output streams
