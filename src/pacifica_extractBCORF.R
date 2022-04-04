@@ -218,7 +218,7 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
         cat("\r",linesDone,"lines processed")
         next
       }
-      
+
       #check whether reads cover the entire range of barcodes and ORF
       matchRanges <- extractMatchRanges(stream)
       inRange <- matchRanges[,1] <= minRange[[1]] & matchRanges[,2] >= minRange[[2]]
@@ -303,10 +303,10 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
     }
     cat("\n")
   },finally={
-    cat(exceptions$export(),"\n",file=paste(outdir,"/bcExtract_exceptions.txt"))
     lapply(bcOuts,close)
     close(bcComboOut)
     close(genoOut)
+    cat(exceptions$export(),"\n",file=paste0(outdir,"/bcExtract_exceptions.txt"))
   })
 
 
