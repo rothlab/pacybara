@@ -152,9 +152,9 @@ if ! [[ -r "$INFQ" ]]; then
   echo "ERROR: Unable to read FASTQ file $INFQ">&2
   exit 1
 fi
-RX='\.fastq\.gz$'
+RX='\.fastq$'
 if ! [[ "$INFQ" =~ $RX ]]; then
-   echo 'ERROR: First parameter must be a *.fastq.gz file' >&2
+   echo 'ERROR: First parameter must be a *.fastq file' >&2
    exit 1
 fi
 
@@ -165,7 +165,7 @@ if ! [[ -r "$REFFASTANOBC" ]]; then
 fi
 RX='\.fasta|\.fa$'
 if ! [[ "$REFFASTANOBC" =~ $RX ]]; then
-   echo 'ERROR: First parameter must be a *.fasta file' >&2
+   echo 'ERROR: Second parameter must be a *.fasta file' >&2
    exit 1
 fi
 
@@ -183,12 +183,14 @@ echo $WORKSPACE
 
 
 #define intermediate files
-OUTPREFIX=$(basename $INFQ|sed -r "s/.fastq.gz$//")
+CHUNKPREFIX=$(basename $INFQ|sed -r "s/.fastq$//")
 #alignment output
-ALNFILE="${WORKSPACE}alignments/${OUTPREFIX}_aligned.bam"
+ALNFILE="${WORKSPACE}/${CHUNKPREFIX}_aligned.bam"
 #extracted barcodes file
-EXTRACTDIR="${WORKSPACE}alignments/${OUTPREFIX}_extract/"
+EXTRACTDIR="${WORKSPACE}/${CHUNKPREFIX}_extract/"
 
+#create the directory
+mkdir -p $EXTRACTDIR
 
 #align to template
 if [[ ! -s "$ALNFILE" ]]; then
@@ -201,16 +203,16 @@ else
   echo "Using existing alignment"
 fi
 
-#generate alignment stats
-if [[ ! -s "${ALNFILE}_stats" ]]; then
-  echo "Generating alignment stats..."
-  samtools flagstat "$ALNFILE" > "${ALNFILE}_stats"
-  #inspect alignment quality
-  samtools view "$ALNFILE" |awk '{ if ($4 == 1) print $6 }' \
-    |sort |uniq -c |sort -nr |head >"${ALNFILE}_topCIGARs" || true
-else
-  echo "Using existing stats"
-fi
+# #generate alignment stats
+# if [[ ! -s "${ALNFILE}_stats" ]]; then
+#   echo "Generating alignment stats..."
+#   samtools flagstat "$ALNFILE" > "${ALNFILE}_stats"
+#   #inspect alignment quality
+#   samtools view "$ALNFILE" |awk '{ if ($4 == 1) print $6 }' \
+#     |sort |uniq -c |sort -nr |head >"${ALNFILE}_topCIGARs" || true
+# else
+#   echo "Using existing stats"
+# fi
 
 #extract barcodes
 if [[ ! -s "${EXTRACTDIR}/bcExtract_1.fastq.gz" ]]; then
@@ -226,37 +228,4 @@ else
   echo "Using existing extracted barcodes"
 fi
 
-#pre-clustering (group fully identical barcode reads)
-zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacifica_precluster.py\
-  |gzip -c>"${EXTRACTDIR}/bcPreclust.fastq.gz"
-#record distribution of pre-cluster sizes
-zcat "${EXTRACTDIR}/bcPreclust.fastq.gz"|grep size|cut -f2,2 -d=|\
-  sort -n|uniq -c>"${EXTRACTDIR}/bcPreclust_distr.txt"
-
-#build bowtie index
-seqret -sequence <(zcat "${EXTRACTDIR}/bcPreclust.fastq.gz")\
-  -outseq "${EXTRACTDIR}/bcPreclust.fasta"
-mkdir "${EXTRACTDIR}/db"
-bowtie2-build "${EXTRACTDIR}/bcPreclust.fasta" \
-  "${EXTRACTDIR}/db/bcComboDB"
-rm "${EXTRACTDIR}/bcPreclust.fasta"
-
-#align all vs all
-bowtie2 --no-head --norc --very-sensitive --all \
-  -x "${EXTRACTDIR}/db/bcComboDB" \
-  -U "${EXTRACTDIR}/bcPreclust.fastq.gz" 2>/dev/null\
-  |awk '{if($1!=$3){print}}'|gzip -c> "${EXTRACTDIR}/bcMatches.sam.gz"
-#delete bowtie library files; no longer needed
-rm -r "${EXTRACTDIR}/db"
-
-#calculate edit distance
-pacifica_calcEdits.R "${EXTRACTDIR}/bcMatches.sam.gz" \
-  "${EXTRACTDIR}/bcPreclust.fastq.gz" --maxError 3 \
-  --output "${EXTRACTDIR}/editDistance.csv.gz"
-
-#perform actual clustering and form consensus
-pacifica_runClustering.R "${EXTRACTDIR}/editDistance.csv.gz" \
-  "${EXTRACTDIR}/genoExtract.csv.gz" "${EXTRACTDIR}/bcPreclust.fastq.gz" \
-  --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
-  --out "${EXTRACTDIR}/clusters.csv.gz"
-
+echo "Done!"
