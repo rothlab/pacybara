@@ -16,13 +16,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
 
+#fail on error, even within pipes; disallow use of unset variables, enable history tracking
+set -euo pipefail -o history -o histexpand
+
 BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
 
 # BCPOS=153
 ORFSTART=207
 ORFEND=2789
-THREADS=24
+THREADS=4
 QARG=""
+BLACKLIST=""
+
 
 #helper function to print usage information
 usage () {
@@ -43,7 +48,8 @@ Usage: pacifica.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>]
 -s|--orfStart  : The ORF start position, defaults to $ORFSTART
 -e|--orfEnd    : The ORF end position, defaults to $ORFEND
 -q|--queue     : The queue (slurm partition) to use
-<INFASTQ>        : The input directory containing fastq.gz files to process
+--blacklist    : A list of nodes not to be used
+<INFASTQ>      : The input fastq.gz file to process
 <FASTA>        : The raw reference fasta file 
 <WORKSPACE>    : The workspace directory. Defaults to 'workspace/'
 
@@ -118,6 +124,15 @@ while (( "$#" )); do
         usage 1
       fi
       ;;
+    -b|--blacklist)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        BLACKLIST=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
     --) # end of options indicates that only positional arguments follow
       shift
       PARAMS="$PARAMS $@"
@@ -180,6 +195,12 @@ if ! [[ "$WORKSPACE" =~ $RX ]]; then
   WORKSPACE="${WORKSPACE}/"
 fi
 
+if [[ -z $BLACKLIST ]]; then
+  BLARG=""
+else
+  BLARG="--blacklist $BLACKLIST"
+fi
+
 
 
 function removeBarcode() {
@@ -238,7 +259,7 @@ OUTPREFIX=$(basename $INFASTQ|sed -r "s/.fastq.gz$//")
 #extracted barcodes file
 CHUNKDIR="${WORKSPACE}/${OUTPREFIX}_chunks/"
 mkdir -p $CHUNKDIR
-mkdir -p ${CHUNKDIR}/logs/
+# mkdir -p ${CHUNKDIR}/logs/
 
 #SPLIT FASTQ INTO CHUNKS
 echo "Splitting FASTQ file into job packages"
@@ -247,103 +268,152 @@ zcat "$INFASTQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
 
 CHUNKS=$(ls ${WORKSPACE}/${OUTPREFIX}_chunks/${OUTPREFIX}*.fastq)
 
-JOBS=""
-
 #PROCESS CHUNKS IN PARALLEL
-for CHUNK in $CHUNKS; do
-  TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
-  #start barseq.R job and capture the job-id number
-  RETVAL=$(submitjob.sh -n $TAG -l ${CHUNKDIR}/${TAG}.log \
-    -e ${CHUNKDIR}/logs/${TAG}.log -t 24:00:00 \
-    -c 4 -m 4G
-    pacifica_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
-    --orfStart $ORFSTART --orfEnd $ORFEND \
-    "$CHUNK" "$REFFASTANOBC" "$CHUNKDIR")
-  JOBID=${RETVAL##* }
-  if [ -z "$JOBS" ]; then
-    #if jobs is empty, set it to the new ID
-    JOBS=$JOBID
+startJobs() {
+  CHUNKS=$1
+  JOBS=""
+  for CHUNK in $CHUNKS; do
+    TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
+    #start barseq.R job and capture the job-id number
+    echo "Submitting $TAG"
+    RETVAL=$(submitjob.sh -n $TAG -l ${CHUNKDIR}/${TAG}.log \
+      -e ${CHUNKDIR}/${TAG}.log -t 24:00:00 \
+      -c 4 -m 4G $BLARG \
+      pacifica_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
+      --orfStart $ORFSTART --orfEnd $ORFEND -c 4 \
+      "$CHUNK" "$REFFASTANOBC" "$CHUNKDIR")
+    JOBID=${RETVAL##* }
+    if [ -z "$JOBS" ]; then
+      #if jobs is empty, set it to the new ID
+      JOBS=$JOBID
+    else
+      #otherwise append the id to the list
+      JOBS=${JOBS},$JOBID
+    fi
+  done
+
+  waitForJobs.sh -v "$JOBS"
+}
+
+checkForFailedJobs() {
+  CHUNKS=$1
+  FAILEDCHUNKS=""
+  for CHUNK in $CHUNKS; do
+    TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
+    LOG=${CHUNKDIR}/${TAG}.log
+    STATUS=$(tail -1 $LOG)
+    if [ "$STATUS" != "Done!" ]; then
+      echo "Process $TAG failed!">&2
+      if [[ -z $FAILEDCHUNKS ]]; then
+        FAILEDCHUNKS="$CHUNK"
+      else
+        FAILEDCHUNKS="$FAILEDCHUNKS $CHUNK"
+      fi
+    fi
+  done
+  echo "$FAILEDCHUNKS"
+}
+
+startJobs "$CHUNKS"
+echo "Validating jobs..."
+FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
+#If any jobs failed, try 2 more times
+TRIES=1
+while ! [[ -z $FAILEDCHUNKS ]]; do
+  if [[ $TRIES < 3 ]]; then
+    echo "Attempting to re-run failed jobs."
+    startJobs "$FAILEDCHUNKS"
+    echo "Validating jobs..."
+    FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
+    ((TRIES++))
   else
-    #otherwise append the id to the list
-    JOBS=${JOBS},$JOBID
+    echo "ERROR: Exhausted 3 attempts at re-running failed jobs!">&2
+    exit 1
   fi
 done
 
-waitForJobs.sh -v "$JOBS"
+#DIRECTORY FOR STORING EXTRACTION RESULTS
+EXTRACTDIR="${WORKSPACE}/${OUTPREFIX}_extract/"
+mkdir -p $EXTRACTDIR
 
 #CONSOLIDATE RESULT CHUNKS
+for CHUNK in $CHUNKS; do
+  TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
+  cat ${CHUNKDIR}${TAG}_extract/bcExtract_1.fastq.gz>>${EXTRACTDIR}/bcExtract_1.fastq.gz
+  cat ${CHUNKDIR}${TAG}_extract/bcExtract_2.fastq.gz>>${EXTRACTDIR}/bcExtract_2.fastq.gz
+  cat ${CHUNKDIR}${TAG}_extract/bcExtract_combo.fastq.gz>>${EXTRACTDIR}/bcExtract_combo.fastq.gz
+  cat ${CHUNKDIR}${TAG}_extract/genoExtract.csv.gz>>${EXTRACTDIR}/genoExtract.csv.gz
+done
+
+#consolidate exception counts
+Rscript -e '
+options(stringsAsFactors=FALSE)
+lines<-readLines(pipe(paste("cat",paste(commandArgs(TRUE),collapse=" "))))
+mat <- do.call(rbind,lapply(strsplit(lines,","),function(elems) {
+  s<-do.call(rbind,strsplit(elems,"="))
+  setNames(as.integer(trimws(s[,2])),s[,1])
+}))
+tot <- colSums(mat)
+cat(paste(sprintf("%s=%d",names(tot),tot),collapse="\n"))
+cat("\n")
+# print(colSums(mat))
+' ${CHUNKDIR}*/*exceptions.txt>${EXTRACTDIR}/exceptions.txt
+
+#Run quick QC of barcode length distributions
+mkdir ${EXTRACTDIR}/qc
+zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
+  sort -n|uniq -c>"${EXTRACTDIR}/qc/bc1len_distr.txt"
+zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
+  sort -n|uniq -c>"${EXTRACTDIR}/qc/bccombolen_distr.txt"
+
+#CLEAN UP CHUNKS
+rm -r $CHUNKDIR
+
+############
+#Clustering
+############
 
 
+#DIRECTORY FOR STORING EXTRACTION RESULTS
+CLUSTERDIR="${WORKSPACE}/${OUTPREFIX}_clustering/"
+mkdir -p $CLUSTERDIR/qc
 
 #pre-clustering (group fully identical barcode reads)
 zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacifica_precluster.py\
-  |gzip -c>"${EXTRACTDIR}/bcPreclust.fastq.gz"
+  |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
 #record distribution of pre-cluster sizes
-zcat "${EXTRACTDIR}/bcPreclust.fastq.gz"|grep size|cut -f2,2 -d=|\
-  sort -n|uniq -c>"${EXTRACTDIR}/bcPreclust_distr.txt"
+zcat "${CLUSTERDIR}/bcPreclust.fastq.gz"|grep size|cut -f2,2 -d=|\
+  sort -n|uniq -c>"${CLUSTERDIR}/qc/bcPreclust_distr.txt"
 
 #build bowtie index
-seqret -sequence <(zcat "${EXTRACTDIR}/bcPreclust.fastq.gz")\
-  -outseq "${EXTRACTDIR}/bcPreclust.fasta"
-mkdir "${EXTRACTDIR}/db"
-bowtie2-build "${EXTRACTDIR}/bcPreclust.fasta" \
-  "${EXTRACTDIR}/db/bcComboDB"
-rm "${EXTRACTDIR}/bcPreclust.fasta"
+seqret -sequence <(zcat "${CLUSTERDIR}/bcPreclust.fastq.gz")\
+  -outseq "${CLUSTERDIR}/bcPreclust.fasta"
+mkdir "${CLUSTERDIR}/db"
+bowtie2-build "${CLUSTERDIR}/bcPreclust.fasta" \
+  "${CLUSTERDIR}/db/bcComboDB"
+rm "${CLUSTERDIR}/bcPreclust.fasta"
 
 #align all vs all
 bowtie2 --no-head --norc --very-sensitive --all \
-  -x "${EXTRACTDIR}/db/bcComboDB" \
-  -U "${EXTRACTDIR}/bcPreclust.fastq.gz" 2>/dev/null\
-  |awk '{if($1!=$3){print}}'|gzip -c> "${EXTRACTDIR}/bcMatches.sam.gz"
+  -x "${CLUSTERDIR}/db/bcComboDB" \
+  -U "${CLUSTERDIR}/bcPreclust.fastq.gz" 2>/dev/null\
+  |awk '{if($1!=$3){print}}'|gzip -c> "${CLUSTERDIR}/bcMatches.sam.gz"
 #delete bowtie library files; no longer needed
-rm -r "${EXTRACTDIR}/db"
+rm -r "${CLUSTERDIR}/db"
 
 #calculate edit distance
-pacifica_calcEdits.R "${EXTRACTDIR}/bcMatches.sam.gz" \
-  "${EXTRACTDIR}/bcPreclust.fastq.gz" --maxError 3 \
-  --output "${EXTRACTDIR}/editDistance.csv.gz"
+pacifica_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
+  "${CLUSTERDIR}/bcPreclust.fastq.gz" --maxErr 3 \
+  --output "${CLUSTERDIR}/editDistance.csv.gz"
 
 #perform actual clustering and form consensus
-pacifica_runClustering.R "${EXTRACTDIR}/editDistance.csv.gz" \
-  "${EXTRACTDIR}/genoExtract.csv.gz" "${EXTRACTDIR}/bcPreclust.fastq.gz" \
+pacifica_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \
+  "${EXTRACTDIR}/genoExtract.csv.gz" "${CLUSTERDIR}/bcPreclust.fastq.gz" \
   --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
-  --out "${EXTRACTDIR}/clusters.csv.gz"
+  --out "${CLUSTERDIR}/clusters.csv.gz" >"${CLUSTERDIR}/qc/clustering.log"
+
+#analyze cluster size distribution
 
 
-
-
-# mkdir -p ${WORKSPACE}alignments
-# mkdir -p ${WORKSPACE}consensus
-# mkdir -p ${WORKSPACE}logs
-
-
-# #iterate over all input FASTQ files
-# i=0
-# INFQS=$(ls ${INDIR}*fastq.gz)
-# for INFQ in $INFQS; do
-  
-#   #set log file
-#   LOGFILE=${WORKSPACE}logs/$(basename $INFQ|sed -r "s/.fastq.gz$/.log/")
-#   #And start worker jobs
-#   ((i++))
-#   echo "Scheduling job #$i for $INFQ"
-#   RETVAL=$(submitjob.sh -n "pacifica$i" -t 24:00:00 $QARG\
-#     -c $THREADS -m $(($THREADS*2))G -l "$LOGFILE" -e "${LOGFILE}err" -- \
-#     pacifica_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
-#     --orfStart $ORFSTART --orfEnd $ORFEND \
-#     "$INFQ" "$REFFASTANOBC" "$WORKSPACE")
-#   JOBID=${RETVAL##* }
-
-#   if [ -z "$JOBS" ]; then
-#     #if jobs is empty, set it to the new ID
-#     JOBS=$JOBID
-#   else
-#     #otherwise append the id to the list
-#     JOBS=${JOBS},$JOBID
-#   fi
-
-# done
-
-# waitForJobs.sh -v "$JOBS"
 
 echo "Done!"

@@ -220,10 +220,10 @@ if [[ ! -s "${EXTRACTDIR}/bcExtract_1.fastq.gz" ]]; then
   pacifica_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\
     --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
   #calculate barcode length distributions
-  zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
-    sort -n|uniq -c>"${EXTRACTDIR}/bc1len_distr.txt"
-  zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
-    sort -n|uniq -c>"${EXTRACTDIR}/bccombolen_distr.txt"
+  # zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
+  #   sort -n|uniq -c>"${EXTRACTDIR}/bc1len_distr.txt"
+  # zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
+  #   sort -n|uniq -c>"${EXTRACTDIR}/bccombolen_distr.txt"
 else 
   echo "Using existing extracted barcodes"
 fi
