@@ -406,14 +406,23 @@ pacifica_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
   "${CLUSTERDIR}/bcPreclust.fastq.gz" --maxErr 3 \
   --output "${CLUSTERDIR}/editDistance.csv.gz"
 
+zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
+  |uniq -c>"${CLUSTERDIR}/qc/edDistr.txt"
+
 #perform actual clustering and form consensus
+# submitjob.sh -n "${OUTPREFIX}_clustering" -c 8 -m 16G -t 1-00:00:00\
+#   -l "${CLUSTERDIR}/qc/clustering.log" -e "${CLUSTERDIR}/qc/clustering_err.log"\
+#   $BLARG -- \
 pacifica_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \
   "${EXTRACTDIR}/genoExtract.csv.gz" "${CLUSTERDIR}/bcPreclust.fastq.gz" \
   --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
-  --out "${CLUSTERDIR}/clusters.csv.gz" >"${CLUSTERDIR}/qc/clustering.log"
+  --out "${CLUSTERDIR}/clusters.csv.gz"
 
 #analyze cluster size distribution
+zcat "${CLUSTERDIR}/clusters.csv.gz"|tail -n +2|cut -f 4 -d,|sort -n\
+  |uniq -c>"${CLUSTERDIR}/qc/clusters_distr.txt"
 
-
+pacifica_translate.R "${CLUSTERDIR}/clusters.csv.gz" \
+  "$REFFASTA" --orfStart "$ORFSTART" --orfEnd "$ORFEND"
 
 echo "Done!"
