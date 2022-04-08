@@ -41,6 +41,8 @@ pargs <- parse_args(p)
 
 outfile <- sub("\\.csv.gz$","_transl.csv.gz",pargs$clusters)
 
+clusters <- read.csv(pargs$clusters)
+
 fcon <- file(pargs$reference,open="r")
 refSeq <- yogiseq::readFASTA(fcon)[[1]]$toString()
 close(fcon)
