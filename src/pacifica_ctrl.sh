@@ -25,6 +25,11 @@ BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
 ORFSTART=207
 ORFEND=2789
 THREADS=4
+MINJACCARD=0.2
+MINMATCHES=1
+MAXDIFF=2
+MINQUAL=100
+VIRTUALBC=0
 QARG=""
 BLACKLIST=""
 
@@ -39,16 +44,30 @@ by Jochen Weile <jochenweile@gmail.com> 2021
 
 Runs Pacifica
 Usage: pacifica.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>] 
-   [-e|--orfEnd <ORFEND>] [-c|--cpus <NUMBER>] [-q|--queue <QUEUE>] 
+   [-e|--orfEnd <ORFEND>] [--minQual <MINQUAL>] 
+   [-m|--minMatches <MINMATCHES>] [--maxDiff <MAXDIFF>] 
+   [-j|--minJaccard <MINJACCARD>] [-v|--virtualBC]
+   [-c|--cpus <NUMBER>] [-q|--queue <QUEUE>] 
+   [--blacklist {<NODE>,}]
    <INFASTQ> <FASTA> [<WORKSPACE>]
 
 -b|--barcode   : The barcode degeneracy code sequence, defaults to
                  $BARCODE
--c|--cpus      : Number of CPUs to use, defaults to $THREADS
 -s|--orfStart  : The ORF start position, defaults to $ORFSTART
 -e|--orfEnd    : The ORF end position, defaults to $ORFEND
+--minQual      : The minimum PHRED quality for variant basecall to be
+                 considered real. Defaults to $MINQUAL
+-m|--minMatches: The minimum number of variant matches for a merge
+                 to occur. Defaults to $MINMATCHES
+--maxDiff      : The maxium allowed edit distance between two clusters
+                 for a merge to occur. Defaults to $MAXDIFF
+-j|--minJaccard: The minimum Jaccard coefficient between to clusters
+                 for a merge to occur. Defaults to $MINJACCARD
+-v|--virtualBC : Use virtual barcodes (fusion of up- and down-tags) 
+                 for clustering. Otherwise only us uptags.
+-c|--cpus      : Number of CPUs to use, defaults to $THREADS
 -q|--queue     : The queue (slurm partition) to use
---blacklist    : A list of nodes not to be used
+--blacklist    : A comma-separated list of compute nodes not to be used
 <INFASTQ>      : The input fastq.gz file to process
 <FASTA>        : The raw reference fasta file 
 <WORKSPACE>    : The workspace directory. Defaults to 'workspace/'
@@ -60,6 +79,7 @@ EOF
 
 #Parse Arguments
 NUMRX='^[0-9]+$'
+FLOATRX='^0\.[0-9]+$'
 PARAMS=""
 while (( "$#" )); do
   case "$1" in
@@ -114,6 +134,62 @@ while (( "$#" )); do
         echo "ERROR: Argument for $1 is missing" >&2
         usage 1
       fi
+      ;;
+    --minQual)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: minQual must be a positive integer number" >&2
+           usage 1
+        fi
+        MINQUAL=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -m|--minMatches)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: minMatches must be a positive integer number" >&2
+           usage 1
+        fi
+        MINMATCHES=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    --maxDiff)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: maxDiff must be a positive integer number" >&2
+           usage 1
+        fi
+        MAXDIFF=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -j|--minJaccard)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $FLOATRX ]] ; then
+           echo "ERROR: minJaccard must be between 0 and 1" >&2
+           usage 1
+        fi
+        MINJACCARD=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -v|--virtualBC)
+      VIRTUALBC=1
+      shift
       ;;
     -q|--queue)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
@@ -314,6 +390,7 @@ checkForFailedJobs() {
   echo "$FAILEDCHUNKS"
 }
 
+echo "Running jobs..."
 startJobs "$CHUNKS"
 echo "Validating jobs..."
 FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
@@ -337,13 +414,18 @@ EXTRACTDIR="${WORKSPACE}/${OUTPREFIX}_extract/"
 mkdir -p $EXTRACTDIR
 
 #CONSOLIDATE RESULT CHUNKS
+echo "Consolidating alignments and genotypes"
 for CHUNK in $CHUNKS; do
+  #this for loop is just to absolutely make sure the order is preserved
   TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
   cat ${CHUNKDIR}${TAG}_extract/bcExtract_1.fastq.gz>>${EXTRACTDIR}/bcExtract_1.fastq.gz
   cat ${CHUNKDIR}${TAG}_extract/bcExtract_2.fastq.gz>>${EXTRACTDIR}/bcExtract_2.fastq.gz
   cat ${CHUNKDIR}${TAG}_extract/bcExtract_combo.fastq.gz>>${EXTRACTDIR}/bcExtract_combo.fastq.gz
   cat ${CHUNKDIR}${TAG}_extract/genoExtract.csv.gz>>${EXTRACTDIR}/genoExtract.csv.gz
 done
+
+samtools cat -o "${OUTPREFIX}_align.bam" ${CHUNKDIR}/*bam
+tar czf "${OUTPREFIX}_alignLog.tgz" ${CHUNKDIR}/*log
 
 #consolidate exception counts
 Rscript -e '
@@ -379,8 +461,15 @@ CLUSTERDIR="${WORKSPACE}/${OUTPREFIX}_clustering/"
 mkdir -p $CLUSTERDIR/qc
 
 #pre-clustering (group fully identical barcode reads)
-zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacifica_precluster.py\
-  |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
+if [[ $VIRTUALBC == 1 ]]; then
+  echo "Indexing virtual barcodes..."
+  zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacifica_precluster.py\
+    |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
+else
+  echo "Indexing uptag barcodes..."
+  zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|pacifica_precluster.py\
+    |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
+fi
 #record distribution of pre-cluster sizes
 zcat "${CLUSTERDIR}/bcPreclust.fastq.gz"|grep size|cut -f2,2 -d=|\
   sort -n|uniq -c>"${CLUSTERDIR}/qc/bcPreclust_distr.txt"
@@ -390,20 +479,22 @@ seqret -sequence <(zcat "${CLUSTERDIR}/bcPreclust.fastq.gz")\
   -outseq "${CLUSTERDIR}/bcPreclust.fasta"
 mkdir "${CLUSTERDIR}/db"
 bowtie2-build "${CLUSTERDIR}/bcPreclust.fasta" \
-  "${CLUSTERDIR}/db/bcComboDB"
+  "${CLUSTERDIR}/db/bcDB"
 rm "${CLUSTERDIR}/bcPreclust.fasta"
 
 #align all vs all
+echo "Aligning all vs all barcodes..."
 bowtie2 --no-head --norc --very-sensitive --all \
-  -x "${CLUSTERDIR}/db/bcComboDB" \
+  -x "${CLUSTERDIR}/db/bcDB" \
   -U "${CLUSTERDIR}/bcPreclust.fastq.gz" 2>/dev/null\
   |awk '{if($1!=$3){print}}'|gzip -c> "${CLUSTERDIR}/bcMatches.sam.gz"
 #delete bowtie library files; no longer needed
 rm -r "${CLUSTERDIR}/db"
 
 #calculate edit distance
+echo "Calculating barcode edit distances..."
 pacifica_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
-  "${CLUSTERDIR}/bcPreclust.fastq.gz" --maxErr 3 \
+  "${CLUSTERDIR}/bcPreclust.fastq.gz" --maxErr "$MAXDIFF" \
   --output "${CLUSTERDIR}/editDistance.csv.gz"
 
 zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
@@ -416,7 +507,8 @@ zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
 pacifica_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \
   "${EXTRACTDIR}/genoExtract.csv.gz" "${CLUSTERDIR}/bcPreclust.fastq.gz" \
   --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
-  --out "${CLUSTERDIR}/clusters.csv.gz"
+  --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \
+  --minMatches "$MINMATCHES" --maxDiff "$MAXDIFF" --minQual "$MINQUAL" 
 
 #analyze cluster size distribution
 zcat "${CLUSTERDIR}/clusters.csv.gz"|tail -n +2|cut -f 4 -d,|sort -n\
