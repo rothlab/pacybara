@@ -30,12 +30,12 @@ THREADS=24
 usage () {
   cat << EOF
 
-pacifica_worker.sh v0.0.1 
+pacybara_worker.sh v0.0.1 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
-Runs Pacifica worker
-Usage: pacifica_worker.sh [-b|--barcode <BARCODE>] [-p|--barcodePos <BCPOS>]
+Runs Pacybara worker
+Usage: pacybara_worker.sh [-b|--barcode <BARCODE>] [-p|--barcodePos <BCPOS>]
    [-s|--orfStart <ORFSTART>] [-e|--orfEnd <ORFEND>] [-c|--cpus <NUMBER>]
    <FASTQ> <FASTA> <WORKSPACE>
 
@@ -217,7 +217,7 @@ fi
 #extract barcodes
 if [[ ! -s "${EXTRACTDIR}/bcExtract_1.fastq.gz" ]]; then
   echo "Extracting barcodes..."
-  pacifica_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\
+  pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\
     --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
   #calculate barcode length distributions
   # zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\

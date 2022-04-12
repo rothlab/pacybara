@@ -30,7 +30,7 @@ library(hash)
 
 p <- arg_parser(
   "translate library",
-  name="pacifica_translate.R"
+  name="pacybara_translate.R"
 )
 p <- add_argument(p, "clusters", help="clusters csv.gz file")
 # p <- add_argument(p, "parameters", help="parameter json file")

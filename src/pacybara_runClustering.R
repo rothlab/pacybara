@@ -1,4 +1,8 @@
 #!/usr/bin/env Rscript
+options(
+  stringsAsFactors=FALSE,
+  ignore.interactive=TRUE
+)
 
 library(pbmcapply) 
 library(hash)
@@ -419,21 +423,19 @@ calcConsensus <- function(rid2bc) {
 cat("Calculating consensus barcodes\n")
 
 #Calc consensus for virtual barcodes
-rid2bc <- hash(
+rid2vbc <- hash(
   preClustsAll|>unlist(),
   lapply(1:length(barcodes),function(i) rep(barcodes[[i]],length(preClustsAll[[i]]))) |>unlist()
 )
-bcConsensus <- calcConsensus(rid2bc)
+bcConsensus <- calcConsensus(rid2vbc)
 
 #Calc consensus for uptags if available)
 if (!is.na(uptags[[1]])) {
-  rid2bc <- hash(names(uptags),uptags)
-  upConsensus <- calcConsensus(rid2bc)
+  rid2upbc <- hash(names(uptags),uptags)
+  upConsensus <- calcConsensus(rid2upbc)
 } else {
   upConsensus <- NA_character_
 }
-#delete index hash to save memory
-rm(rid2bc)
 
 
 cat("Compiling results\n")
@@ -464,7 +466,11 @@ out1 <- lapply(names(clusterGenos),function(cname) {
   )
 })|>yogitools::as.df()
 out2 <- data.frame(
-  virtualBarcode=barcodes[singletonReads],
+  # virtualBarcode=barcodes[singletonReads],
+  virtualBarcode=sapply(singletonReads,function(rid) {
+    bc <- rid2bc[[rid]]
+    if (is.null(bc)) NA_character_ else bc
+  }),
   upBarcode=if(is.na(uptags[[1]])) NA_character_ else uptags[singletonReads],
   reads=singletonReads,
   size=1,

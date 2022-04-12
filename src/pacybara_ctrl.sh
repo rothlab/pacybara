@@ -38,12 +38,12 @@ BLACKLIST=""
 usage () {
   cat << EOF
 
-pacifica.sh v0.0.1 
+pacybara.sh v0.0.1 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
-Runs Pacifica
-Usage: pacifica.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>] 
+Runs Pacybara
+Usage: pacybara.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>] 
    [-e|--orfEnd <ORFEND>] [--minQual <MINQUAL>] 
    [-m|--minMatches <MINMATCHES>] [--maxDiff <MAXDIFF>] 
    [-j|--minJaccard <MINJACCARD>] [-v|--virtualBC]
@@ -355,7 +355,7 @@ startJobs() {
     RETVAL=$(submitjob.sh -n $TAG -l ${CHUNKDIR}/${TAG}.log \
       -e ${CHUNKDIR}/${TAG}.log -t 24:00:00 \
       -c 4 -m 4G $BLARG \
-      pacifica_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
+      pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
       --orfStart $ORFSTART --orfEnd $ORFEND -c 4 \
       "$CHUNK" "$REFFASTANOBC" "$CHUNKDIR")
     JOBID=${RETVAL##* }
@@ -463,11 +463,11 @@ mkdir -p $CLUSTERDIR/qc
 #pre-clustering (group fully identical barcode reads)
 if [[ $VIRTUALBC == 1 ]]; then
   echo "Indexing virtual barcodes..."
-  zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacifica_precluster.py\
+  zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacybara_precluster.py\
     |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
 else
   echo "Indexing uptag barcodes..."
-  zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|pacifica_precluster.py\
+  zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|pacybara_precluster.py\
     |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
 fi
 #record distribution of pre-cluster sizes
@@ -493,7 +493,7 @@ rm -r "${CLUSTERDIR}/db"
 
 #calculate edit distance
 echo "Calculating barcode edit distances..."
-pacifica_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
+pacybara_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
   "${CLUSTERDIR}/bcPreclust.fastq.gz" --maxErr "$MAXDIFF" \
   --output "${CLUSTERDIR}/editDistance.csv.gz"
 
@@ -504,7 +504,7 @@ zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
 # submitjob.sh -n "${OUTPREFIX}_clustering" -c 8 -m 16G -t 1-00:00:00\
 #   -l "${CLUSTERDIR}/qc/clustering.log" -e "${CLUSTERDIR}/qc/clustering_err.log"\
 #   $BLARG -- \
-pacifica_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \
+pacybara_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \
   "${EXTRACTDIR}/genoExtract.csv.gz" "${CLUSTERDIR}/bcPreclust.fastq.gz" \
   --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
   --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \
@@ -514,7 +514,7 @@ pacifica_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \
 zcat "${CLUSTERDIR}/clusters.csv.gz"|tail -n +2|cut -f 4 -d,|sort -n\
   |uniq -c>"${CLUSTERDIR}/qc/clusters_distr.txt"
 
-pacifica_translate.R "${CLUSTERDIR}/clusters.csv.gz" \
+pacybara_translate.R "${CLUSTERDIR}/clusters.csv.gz" \
   "$REFFASTA" --orfStart "$ORFSTART" --orfEnd "$ORFEND"
 
 echo "Done!"
