@@ -53,19 +53,19 @@ distros[is.na(distros)] <- 0
 pdf(paste0(pargs$outdir,"clusterSizes.pdf"),5,5)
 distros|>barplot(beside=TRUE,border=NA,
   xlab="size",ylab="count",
-  col=c("red","blue")
+  col=c("steelblue3","chartreuse3")
 )
-legend("topright",c("uptag counts","final cluster sizes"),fill=c("red","blue"))
+legend("topright",c("uptag counts","final cluster sizes"),fill=c("steelblue3","chartreuse3"))
 dev.off()
 
 #########################################
 # Filter for usable barcodes and CCS > 1
-cleanBarcodes <- with(clusters, upBarcode[upTagCollision==""] |> unique() )
+cleanBarcodes <- with(clusters, upBarcode[upTagCollision=="" & size > 1] |> unique() )
 compromisedBarcodes <- with(clusters, upBarcode[upTagCollision=="collision"] |> unique() )
 
 pdf(paste0(pargs$outdir,"compromisedBC.pdf"),5,5)
 barplot(
-  c(unique=length(cleanBarcodes),compromised=length(compromisedBarcodes)),
+  c(clean=length(cleanBarcodes),compromised=length(compromisedBarcodes)),
   border=NA,col=c("steelblue3","firebrick3"),ylab="#uptag barcodes"
 )
 dev.off()
