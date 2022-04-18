@@ -37,6 +37,7 @@ p <- add_argument(p, "clusters", help="clusters csv.gz file")
 p <- add_argument(p, "reference", help="fasta file containing reference sequence")
 p <- add_argument(p, "--orfStart", help="ORF start position",default=207L)
 p <- add_argument(p, "--orfEnd", help="ORF end position",default=2789L)
+p <- add_argument(p, "--minClusterSize", help="Minimum cluster size to filter for",default=2L)
 pargs <- parse_args(p)
 
 outfile <- sub("\\.csv.gz$","_transl.csv.gz",pargs$clusters)
@@ -115,3 +116,11 @@ outcon <- gzfile(outfile,open="w")
 write.csv(out,outcon,row.names=FALSE)
 close(outcon)
 
+#create filtered output
+outfiltered <- out[which(out$upTagCollision=="" & out$size >= pargs$minClusterSize),c(2,8:14,4)]
+colnames(outfiltered)[[1]] <- "barcode"
+
+outfile <- sub("\\.csv.gz$","_transl_filtered.csv.gz",pargs$clusters)
+outcon <- gzfile(outfile,open="w")
+write.csv(outfiltered,outcon,row.names=FALSE)
+close(outcon)
