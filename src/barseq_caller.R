@@ -39,10 +39,10 @@ p <- add_argument(p, "--maxErr", help="Maximum allowed number of errors in barco
 args <- parse_args(p)
 
 # args <- list(
-#   library="../libraries/LDLR_R03_subassembly_varcalls_transl.csv",
-#   r1="LDLR_Reg3_Rep1_All_S12_R1_001_aaa.fastq",
+#   library="../../libraries/LDLR_R01_pacybara.csv",
+#   r1="LDLR_test.fastq",
 #   r2=NA,bcLen=25L,output=NA,flanking="flanking.fasta",
-#   rc=TRUE, maxErr=2L
+#   rc=TRUE, maxErr=1L
 # )
 
 #intended barcode length
@@ -132,9 +132,10 @@ extractBCs <- function(rseqs,flseqs,bcLen=25) {
   sapply(rseqs, function(rseq) {
 
     #try simple regex match first
-    start <- as.vector(regexpr(flseqs[[1]],rseq)+nchar(flseqs[[1]]))
-    end <- as.vector(regexpr(flseqs[[2]],rseq))-1
-    if (start >= 0 && end >= 0 && end-start+1 == bcLen) {
+    start <- regexpr(flseqs[[1]],rseq)+nchar(flseqs[[1]])
+    end <- regexpr(flseqs[[2]],rseq)-1
+    if (attr(start,"match.length") > 0 && attr(end,"match.length") > 0 && 
+        start >= 0 && end >= 0 && end-start+1 > bcLen-4) {
       return(substr(rseq,start,end))
     }
 
@@ -169,7 +170,7 @@ extractBCs <- function(rseqs,flseqs,bcLen=25) {
       endCandidates - sc - nchar(flseqs[[1]])
     }))
 
-    if (sum(dists==bcLen) != 1) {
+    if (sum(dists > bcLen-4 | dists < bcLen+4) != 1) {
       #ambiguous matches
       return(NA_character_)
     }
