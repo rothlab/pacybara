@@ -170,12 +170,13 @@ extractBCs <- function(rseqs,flseqs,bcLen=25) {
       endCandidates - sc - nchar(flseqs[[1]])
     }))
 
-    if (sum(dists > bcLen-4 | dists < bcLen+4) != 1) {
+    usable <- (dists > bcLen-4 & dists < bcLen+4)
+    if (sum(usable) != 1) {
       #ambiguous matches
       return(NA_character_)
     }
 
-    idx <- which(dists==bcLen,arr.ind=TRUE)
+    idx <- which(usable,arr.ind=TRUE)
     start <- startCandidates[[idx[1,"row"]]]+nchar(flseqs[[1]])
     end <- endCandidates[[idx[1,"col"]]]-1
 
