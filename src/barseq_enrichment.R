@@ -39,7 +39,7 @@ samples <- read.delim(pargs$samples)
 #substitute dashes in sample names (to account for read.csv)
 samples$sample <- gsub("-",".",samples$sample)
 #remove snvs column
-counts$snvs <- NULL
+# counts$snvs <- NULL
 
 #quick lookup for number of replicates
 nreps <- length(unique(samples$replicate))
@@ -67,7 +67,7 @@ join.datapoints <- function(ms,sds,dfs,ws=(1/sds)/sum(1/sds)) {
 }
 
 #calculate frequencies
-freqs <- apply(counts[,-(1:7)],2,function(col) col/sum(col))
+freqs <- apply(counts[,-(1:9)],2,function(col) col/sum(col))
 
 #collapse replicates
 conds <- with(samples,tapply(sample,with(samples,paste(assay,condition,sep=".")),c))
@@ -98,7 +98,7 @@ lrs <- do.call(cbind,setNames(lapply(assays, function(assay) {
     data.frame(lr=lr,sd=lr.sd,allfreq=msd[,nsmeancol])
   }),sConds))
 }),assays))
-lrs <- cbind(counts[,1:7],lrs)
+lrs <- cbind(counts[,1:9],lrs)
 
 #save to file
 write.csv(lrs,paste0(pargs$outdir,"allLRs.csv"),row.names=FALSE)
@@ -120,7 +120,7 @@ scores <- do.call(cbind,setNames(lapply(assays, function(assay) {
     data.frame(score=score,sd=score.sd,allfreq=lrs[,fcol])
   }),sConds))
 }),assays))
-scores <- cbind(counts[,1:7],scores)
+scores <- cbind(counts[,1:9],scores)
 
 write.csv(scores,paste0(pargs$outdir,"allScores.csv"),row.names=FALSE)
 
