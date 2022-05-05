@@ -468,7 +468,7 @@ out1 <- lapply(names(clusterGenos),function(cname) {
 out2 <- data.frame(
   # virtualBarcode=barcodes[singletonReads],
   virtualBarcode=sapply(singletonReads,function(rid) {
-    bc <- rid2bc[[rid]]
+    bc <- rid2vbc[[rid]]
     if (is.null(bc)) NA_character_ else bc
   }),
   upBarcode=if(is.na(uptags[[1]])) NA_character_ else uptags[singletonReads],
