@@ -64,7 +64,7 @@ Usage: pacybara.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>]
 -j|--minJaccard: The minimum Jaccard coefficient between to clusters
                  for a merge to occur. Defaults to $MINJACCARD
 -v|--virtualBC : Use virtual barcodes (fusion of up- and down-tags) 
-                 for clustering. Otherwise only us uptags.
+                 for clustering. Otherwise only use uptags.
 -c|--cpus      : Number of CPUs to use, defaults to $THREADS
 -q|--queue     : The queue (slurm partition) to use
 --blacklist    : A comma-separated list of compute nodes not to be used
@@ -501,7 +501,7 @@ zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
   |uniq -c>"${CLUSTERDIR}/qc/edDistr.txt"
 
 #perform actual clustering and form consensus
-# submitjob.sh -n "${OUTPREFIX}_clustering" -c 8 -m 16G -t 1-00:00:00\
+# submitjob.sh -n "${OUTPREFIX}_clustering" -c 8 -m 16G -t 5-00:00:00\
 #   -l "${CLUSTERDIR}/qc/clustering.log" -e "${CLUSTERDIR}/qc/clustering_err.log"\
 #   $BLARG -- \
 pacybara_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \

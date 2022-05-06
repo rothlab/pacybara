@@ -209,7 +209,7 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
       #vector of line numbers
       # lineNums <- linesDone + (1:nlines)
       flags <- stream$getFlags()
-      passfilter <- with(flags, !segmentUnmapped & !revComp & !failQC & !secondary)
+      passfilter <- with(flags, !segmentUnmapped & !failQC & !secondary)
       exceptions$add("failQC",sum(!passfilter))
 
       #if nothing passes filter, skip to next chunk
