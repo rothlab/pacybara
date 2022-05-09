@@ -115,5 +115,8 @@ barplot(
 par(op)
 invisible(dev.off())
 
+# tallyPos <- gsub("\\D+","",names(aaChangeTally))|>as.integer()
+# inReg <- tallyPos >=706 & tallyPos <= 879
+# aaChangeTally[inReg]|>table()
 
 cat("Done!\n")
