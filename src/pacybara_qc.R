@@ -28,6 +28,7 @@ p <- arg_parser(
   name="pacybara_qc.R"
 )
 p <- add_argument(p, "clusters", help="translated clusters csv.gz file")
+p <- add_argument(p, "extractDir", help="pacybara extract directory")
 p <- add_argument(p, "outdir", help="output directory")
 pargs <- parse_args(p)
 
@@ -114,6 +115,23 @@ barplot(
 )
 par(op)
 invisible(dev.off())
+
+#extraction QC
+successCon <- pipe(sprintf("zcat %s/genoExtract.csv.gz|wc -l",pargs$extractDir))
+success <- readLines(successCon)
+close(successCon)
+success <- as.integer(success)
+exceptions <- readLines(sprintf("%s/exceptions.txt",pargs$extractDir))
+exceptions <- strsplit(exceptions,"=")
+extractQC <- sapply(exceptions,`[[`,2)|>as.integer()|>setNames(sapply(exceptions,`[[`,1))
+extractQC <- c(success=success,extractQC)
+
+pdf(sprintf("%s/extractionQC.png",pargs$outdir),5,7)
+# png(sprintf("%s/extractionQC.png",pargs$outdir),200*5,200*7,res=200)
+op <- par(mar=c(10,4,4,1),las=3)
+barplot(extractQC,border=NA,col=c(3,2,2,2),ylab="CCS reads",main="barcode and genotype extraction")
+par(op)
+dev.off()
 
 # tallyPos <- gsub("\\D+","",names(aaChangeTally))|>as.integer()
 # inReg <- tallyPos >=706 & tallyPos <= 879
