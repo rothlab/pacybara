@@ -126,7 +126,7 @@ exceptions <- strsplit(exceptions,"=")
 extractQC <- sapply(exceptions,`[[`,2)|>as.integer()|>setNames(sapply(exceptions,`[[`,1))
 extractQC <- c(success=success,extractQC)
 
-pdf(sprintf("%s/extractionQC.png",pargs$outdir),5,7)
+pdf(sprintf("%s/extractionQC.pdf",pargs$outdir),5,7)
 # png(sprintf("%s/extractionQC.png",pargs$outdir),200*5,200*7,res=200)
 op <- par(mar=c(10,4,4,1),las=3)
 barplot(extractQC,border=NA,col=c(3,2,2,2),ylab="CCS reads",main="barcode and genotype extraction")
