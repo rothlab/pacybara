@@ -47,7 +47,7 @@ clusters <- read.csv(pargs$clusters)
 uptagDistro <- clusters$upBarcode|>table()|>table()
 sizeDistro <- clusters$size|>table()
 
-sizes <- 1:(uptagDistro|>names()|>as.integer()|>max())
+sizes <- 1:(c(uptagDistro|>names(),sizeDistro|>names())|>as.integer()|>max())
 distros <- sizes|>as.character()|>sapply(\(x)c(up=uptagDistro[x],clust=sizeDistro[x]))
 distros[is.na(distros)] <- 0
 
