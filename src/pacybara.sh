@@ -514,7 +514,12 @@ pacybara_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \
 zcat "${CLUSTERDIR}/clusters.csv.gz"|tail -n +2|cut -f 4 -d,|sort -n\
   |uniq -c>"${CLUSTERDIR}/qc/clusters_distr.txt"
 
+#translate variants to amino acid level and separate off-target mutations
 pacybara_translate.R "${CLUSTERDIR}/clusters.csv.gz" \
   "$REFFASTA" --orfStart "$ORFSTART" --orfEnd "$ORFEND"
+
+#run QC analysis
+pacybara_qc.R "${CLUSTERDIR}/clusters_transl.csv.gz" \
+  "${EXTRACTDIR}/" "${CLUSTERDIR}/qc"
 
 echo "Done!"
