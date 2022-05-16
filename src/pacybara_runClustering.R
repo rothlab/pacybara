@@ -1,7 +1,6 @@
 #!/usr/bin/env Rscript
 options(
-  stringsAsFactors=FALSE,
-  ignore.interactive=TRUE
+  stringsAsFactors=FALSE
 )
 
 library(pbmcapply) 
@@ -22,6 +21,7 @@ p <- add_argument(p, "--minJaccard",help="minimum jaccard cofficient to merge cl
 p <- add_argument(p, "--minMatches",help="minimum number of variant matches to merge clusters",default=1L)
 p <- add_argument(p, "--maxDiff",help="maxiumum allowed edit distance between barcodes",default=2L)
 p <- add_argument(p, "--minQual", help="minimum variant Q-score to be accepted as real variant.",default=100L)
+p <- add_argument(p, "--verbose", help="output details about each cluster merge decision.",flag=TRUE)
 p <- add_argument(p, "--out", help="output file (csv.gz)",default="clusters.csv.gz")
 args <- parse_args(p)
 
@@ -34,6 +34,13 @@ minJaccard <- args$minJaccard
 minMatches <- args$minMatches
 minQual <- args$minQual
 outfile <- args$out
+
+options(pacybaraVerbose=args$verbose)
+if (args$verbose){
+  options(
+    ignore.interactive=TRUE
+  )
+}
 
 #function composition operator
 `%o%` <- function(f,g) {
@@ -107,56 +114,68 @@ new.fastClust <- function(minJaccard=0.3) {
         cl2members[[jointID]] <<- c(id1,id2)
         member2cl[[id1]] <<- jointID
         member2cl[[id2]] <<- jointID
-        cat(sprintf(
-          "New cluster %s. Members: %s, %s. bcDist:%d; genoDist:%d; jaccard:%.02f\n",
-          jointID,id1,id2,bcDist,genoDist,jaccard
-        ))
+        if (options("pacybaraVerbose")) {
+          cat(sprintf(
+            "New cluster %s. Members: %s, %s. bcDist:%d; genoDist:%d; jaccard:%.02f\n",
+            jointID,id1,id2,bcDist,genoDist,jaccard
+          ))
+        }
       } else {
         #read1 is new
         cl2members[[clID2]] <<- c(cl2members[[clID2]],id1)
         member2cl[[id1]] <<- clID2
-        cat(sprintf(
-          "Added %s to %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
-          id1,clID2,length(cl2members[[clID2]]),bcDist,genoDist,jaccard
-        ))
+        if (options("pacybaraVerbose")) {
+          cat(sprintf(
+            "Added %s to %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
+            id1,clID2,length(cl2members[[clID2]]),bcDist,genoDist,jaccard
+          ))
+        }
       }
     } else {
       if (clID2==sentinel) {
         #read2 is new
         cl2members[[clID1]] <<- c(cl2members[[clID1]],id2)
         member2cl[[id2]] <<- clID1
-        cat(sprintf(
-          "Added %s to %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
-          id2,clID1,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
-        ))
+        if (options("pacybaraVerbose")) {
+          cat(sprintf(
+            "Added %s to %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
+            id2,clID1,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
+          ))
+        }
       } else {
         #both are already with existing clusters
         if (clID1==clID2) {
           #already done
-          cat(sprintf(
-            "Rediscovered %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
-            clID1,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
-          ))
+          if (options("pacybaraVerbose")) {
+            cat(sprintf(
+              "Rediscovered %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
+              clID1,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
+            ))
+          }
         } else {
-          #merge clusterss under first cluster ID, delete second
+          #merge clusters under first cluster ID, delete second
           old2Members <- cl2members[[clID2]]
           cl2members[[clID1]] <<- c(cl2members[[clID1]],old2Members)
           values(member2cl,keys=old2Members) <<- clID1
           cl2members[[clID2]] <<- NULL
-          cat(sprintf(
-            "Merged %s and %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
-            clID1,clID2,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
-          ))
+          if (options("pacybaraVerbose")) {
+            cat(sprintf(
+              "Merged %s and %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
+              clID1,clID2,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
+            ))
+          }
         }
       }
     }
   }
   rejectMerge <- function(id1,id2,bcDist,genoDist,jaccard) {
     knownPairs[[pairID(id1,id2)]] <<- TRUE
-    cat(sprintf(
-      "Rejected pairing %s and %s. bcDist:%d; genoDist:%d; jaccard:%.02f\n",
-      id1,id2,bcDist,genoDist,jaccard
-    ))
+    if (options("pacybaraVerbose")) {
+      cat(sprintf(
+        "Rejected pairing %s and %s. bcDist:%d; genoDist:%d; jaccard:%.02f\n",
+        id1,id2,bcDist,genoDist,jaccard
+      ))
+    }
   }
   list(
     isKnown=isKnown,
@@ -241,7 +260,7 @@ genoList <- strsplit(genos,";")|>pbmclapply(function(gs) {
   data.frame(var=sapply(l,`[[`,1),qual=as.numeric(sapply(l,`[[`,2)))
 },mc.cores=8)
 
-cat("Clustering\n")
+cat("Clustering: Finding seed clusters...\n")
 
 #create cluster object
 fastclust <- new.fastClust()
@@ -329,6 +348,7 @@ judgeConnection <- function(id1,id2,bcDist) {
 
 #Iteratively step through connections with greater barcode differences
 for (bcDist in 1:maxDiff) {
+  cat("Clustering: Examining merges at barcode distance",bcDist,"...\n")
   edist[edist$dist==bcDist,1:2] |> apply(1, function(pair) {
     #the pair of pre-clusters still needs to be resolved into a list of reads
     ids <- strsplit(pair,"\\|")
