@@ -114,7 +114,7 @@ new.fastClust <- function(minJaccard=0.3) {
         cl2members[[jointID]] <<- c(id1,id2)
         member2cl[[id1]] <<- jointID
         member2cl[[id2]] <<- jointID
-        if (options("pacybaraVerbose")) {
+        if (getOption("pacybaraVerbose")) {
           cat(sprintf(
             "New cluster %s. Members: %s, %s. bcDist:%d; genoDist:%d; jaccard:%.02f\n",
             jointID,id1,id2,bcDist,genoDist,jaccard
@@ -124,7 +124,7 @@ new.fastClust <- function(minJaccard=0.3) {
         #read1 is new
         cl2members[[clID2]] <<- c(cl2members[[clID2]],id1)
         member2cl[[id1]] <<- clID2
-        if (options("pacybaraVerbose")) {
+        if (getOption("pacybaraVerbose")) {
           cat(sprintf(
             "Added %s to %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
             id1,clID2,length(cl2members[[clID2]]),bcDist,genoDist,jaccard
@@ -136,7 +136,7 @@ new.fastClust <- function(minJaccard=0.3) {
         #read2 is new
         cl2members[[clID1]] <<- c(cl2members[[clID1]],id2)
         member2cl[[id2]] <<- clID1
-        if (options("pacybaraVerbose")) {
+        if (getOption("pacybaraVerbose")) {
           cat(sprintf(
             "Added %s to %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
             id2,clID1,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
@@ -146,7 +146,7 @@ new.fastClust <- function(minJaccard=0.3) {
         #both are already with existing clusters
         if (clID1==clID2) {
           #already done
-          if (options("pacybaraVerbose")) {
+          if (getOption("pacybaraVerbose")) {
             cat(sprintf(
               "Rediscovered %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
               clID1,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
@@ -158,7 +158,7 @@ new.fastClust <- function(minJaccard=0.3) {
           cl2members[[clID1]] <<- c(cl2members[[clID1]],old2Members)
           values(member2cl,keys=old2Members) <<- clID1
           cl2members[[clID2]] <<- NULL
-          if (options("pacybaraVerbose")) {
+          if (getOption("pacybaraVerbose")) {
             cat(sprintf(
               "Merged %s and %s. Size:%d; bcDist:%d; genoDist:%d; jaccard:%.02f\n",
               clID1,clID2,length(cl2members[[clID1]]),bcDist,genoDist,jaccard
@@ -170,7 +170,7 @@ new.fastClust <- function(minJaccard=0.3) {
   }
   rejectMerge <- function(id1,id2,bcDist,genoDist,jaccard) {
     knownPairs[[pairID(id1,id2)]] <<- TRUE
-    if (options("pacybaraVerbose")) {
+    if (getOption("pacybaraVerbose")) {
       cat(sprintf(
         "Rejected pairing %s and %s. bcDist:%d; genoDist:%d; jaccard:%.02f\n",
         id1,id2,bcDist,genoDist,jaccard
