@@ -51,11 +51,20 @@ sizes <- 1:(c(uptagDistro|>names(),sizeDistro|>names())|>as.integer()|>max())
 distros <- sizes|>as.character()|>sapply(\(x)c(up=uptagDistro[x],clust=sizeDistro[x]))
 distros[is.na(distros)] <- 0
 
-pdf(paste0(pargs$outdir,"clusterSizes.pdf"),5,5)
+if (max(sizes) > 20) {
+  distros <- cbind(
+    distros[,1:19],
+    `>=20`=rowSums(distros[,20:ncol(distros)])
+  )
+}
+
+pdf(paste0(pargs$outdir,"clusterSizes.pdf"),7,5)
+opar <- par(las=3)
 distros|>barplot(beside=TRUE,border=NA,
   xlab="size",ylab="count",
   col=c("steelblue3","chartreuse3")
 )
+par(opar)
 legend("topright",c("uptag counts","final cluster sizes"),fill=c("steelblue3","chartreuse3"))
 dev.off()
 
