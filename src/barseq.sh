@@ -150,21 +150,48 @@ mkdir -p ${WORKSPACE}chunks
 mkdir -p ${WORKSPACE}counts
 mkdir -p ${WORKSPACE}scores
 
-#if we're in paired-end mode, look for R1 and R2 files separately
-if [[ $PAIREDEND == 1 ]]; then
-  R1FQS=$(ls $INPUTFOLDER/*_R1_*fastq.gz)
-  #Do a preliminary scan to see if all files are accounted for
-  for R1FQ in $R1FQS; do
-    R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
-    if  [[ ! -r "$R2FQ" ]]; then
-      echo "ERROR: Unable to find or read R2 file $R2FQ !">&2
-      exit 1
+#helper function to check that FASTQ files exist for each sample
+#listed in the parameter sheet
+function validateFASTQs() {
+  SAMPLENAMES=$(tail -n +2 ${SAMPLES}|cut -f 1)
+  R1FQS=""
+  for SAMPLENAME in $SAMPLENAMES; do
+    FILEMATCH=$(echo ${INPUTFOLDER}/${SAMPLENAME}*R1*.fastq.gz)
+    if [[ -r $FILEMATCH ]]; then
+      R1FQ=$(ls ${INPUTFOLDER}/${SAMPLENAME}*R1*.fastq.gz)
+      R1FQS="${R1FQS} ${R1FQ}"
+    else 
+      echo "ERROR: Unable to find or read FASTQ file for sample $SAMPLENAME">&2
+      exit 2
+    fi
+    #in case of paired-end mode, also check for R2 file
+    if [[ $PAIREDEND == 1 ]]; then
+      R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
+      if  [[ ! -r "$R2FQ" ]]; then
+        echo "ERROR: Unable to find or read R2 FASTQ file $R2FQ !">&2
+        exit 1
+      fi
     fi
   done
-else
-  #otherwise just use all fastq files directly
-  R1FQS=$(ls $INPUTFOLDER/*fastq.gz)
-fi
+  echo "$R1FQS"
+}
+R1FQS="$(validateFASTQs)"
+#the code block below was superceded by the new function above
+# #if we're in paired-end mode, look for R1 and R2 files separately
+# if [[ $PAIREDEND == 1 ]]; then
+#   R1FQS=$(ls $INPUTFOLDER/*_R1_*fastq.gz)
+#   #Do a preliminary scan to see if all files are accounted for
+#   for R1FQ in $R1FQS; do
+#     R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
+#     if  [[ ! -r "$R2FQ" ]]; then
+#       echo "ERROR: Unable to find or read R2 file $R2FQ !">&2
+#       exit 1
+#     fi
+#   done
+# else
+#   #otherwise just use all fastq files directly
+#   R1FQS=$(ls $INPUTFOLDER/*fastq.gz)
+# fi
 
 #helper function to process a list of FASTQ chunks
 processChunks() {
