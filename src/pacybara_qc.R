@@ -30,6 +30,7 @@ p <- arg_parser(
 p <- add_argument(p, "clusters", help="translated clusters csv.gz file")
 p <- add_argument(p, "extractDir", help="pacybara extract directory")
 p <- add_argument(p, "outdir", help="output directory")
+p <- add_argument(p, "--softFilter", help="indicates that the clusters file is soft-filtered.", flag=TRUE)
 pargs <- parse_args(p)
 
 # pargs <- list(clusters="clusters_transl.csv.gz",outdir="qc/")
@@ -68,19 +69,25 @@ par(opar)
 legend("topright",c("uptag counts","final cluster sizes"),fill=c("steelblue3","chartreuse3"))
 dev.off()
 
+if (!pargs$softFilter) {
+  cleanBarcodes <- with(clusters, upBarcode[upTagCollision=="" & size > 1] |> unique() )
+  compromisedBarcodes <- with(clusters, upBarcode[upTagCollision=="collision"] |> unique() )
+
+  pdf(paste0(pargs$outdir,"compromisedBC.pdf"),5,5)
+  barplot(
+    c(clean=length(cleanBarcodes),compromised=length(compromisedBarcodes)),
+    border=NA,col=c("steelblue3","firebrick3"),ylab="#uptag barcodes"
+  )
+  dev.off()
+}
+
 #########################################
 # Filter for usable barcodes and CCS > 1
-cleanBarcodes <- with(clusters, upBarcode[upTagCollision=="" & size > 1] |> unique() )
-compromisedBarcodes <- with(clusters, upBarcode[upTagCollision=="collision"] |> unique() )
-
-pdf(paste0(pargs$outdir,"compromisedBC.pdf"),5,5)
-barplot(
-  c(clean=length(cleanBarcodes),compromised=length(compromisedBarcodes)),
-  border=NA,col=c("steelblue3","firebrick3"),ylab="#uptag barcodes"
-)
-dev.off()
-
-clusters <- clusters[with(clusters,upTagCollision=="" & size > 1),]
+if (pargs$softFilter) {
+  clusters <- clusters[clusters$size > 1,]
+} else {
+  clusters <- clusters[with(clusters,upTagCollision=="" & size > 1),]
+}
 
 ##########################################
 # Draw coverage plot
