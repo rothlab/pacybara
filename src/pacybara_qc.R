@@ -48,26 +48,47 @@ clusters <- read.csv(pargs$clusters)
 uptagDistro <- clusters$upBarcode|>table()|>table()
 sizeDistro <- clusters$size|>table()
 
-sizes <- 1:(c(uptagDistro|>names(),sizeDistro|>names())|>as.integer()|>max())
-distros <- sizes|>as.character()|>sapply(\(x)c(up=uptagDistro[x],clust=sizeDistro[x]))
-distros[is.na(distros)] <- 0
+if (!pargs$softFilter) {
+  sizes <- 1:(c(uptagDistro|>names(),sizeDistro|>names())|>as.integer()|>max())
+  distros <- sizes|>as.character()|>sapply(\(x)c(up=uptagDistro[x],clust=sizeDistro[x]))
+  distros[is.na(distros)] <- 0
 
-if (max(sizes) > 20) {
-  distros <- cbind(
-    distros[,1:19],
-    `>=20`=rowSums(distros[,20:ncol(distros)])
+  if (max(sizes) > 20) {
+    distros <- cbind(
+      distros[,1:19],
+      `>=20`=rowSums(distros[,20:ncol(distros)])
+    )
+  }
+
+  pdf(paste0(pargs$outdir,"clusterSizes.pdf"),7,5)
+  opar <- par(las=3)
+  distros|>barplot(beside=TRUE,border=NA,
+    xlab="size",ylab="count",
+    col=c("steelblue3","chartreuse3")
   )
+  par(opar)
+  legend("topright",c("uptag counts","final cluster sizes"),fill=c("steelblue3","chartreuse3"))
+  dev.off()
+  
+} else {
+  sizeDistro <- setNames(sizeDistro[as.character(1:max(sizes))],1:max(sizes))
+  sizeDistro[is.na(sizeDistro)] <- 0
+  if (max(sizes) > 20) {
+    sizeDistro <- c(
+      sizeDistro[1:19],
+      `>=20`=sum(sizeDistro[20:length(sizeDistro)])
+    )
+  }
+  pdf(paste0(pargs$outdir,"clusterSizes.pdf"),7,5)
+  opar <- par(las=3)
+  sizeDistro|>barplot(border=NA,
+    xlab="size",ylab="count",
+    col="chartreuse3"
+  )
+  par(opar)
+  # legend("topright",c("uptag counts","final cluster sizes"),fill=c("steelblue3","chartreuse3"))
+  dev.off()
 }
-
-pdf(paste0(pargs$outdir,"clusterSizes.pdf"),7,5)
-opar <- par(las=3)
-distros|>barplot(beside=TRUE,border=NA,
-  xlab="size",ylab="count",
-  col=c("steelblue3","chartreuse3")
-)
-par(opar)
-legend("topright",c("uptag counts","final cluster sizes"),fill=c("steelblue3","chartreuse3"))
-dev.off()
 
 if (!pargs$softFilter) {
   cleanBarcodes <- with(clusters, upBarcode[upTagCollision=="" & size > 1] |> unique() )
