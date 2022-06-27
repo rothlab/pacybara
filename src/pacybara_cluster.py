@@ -11,6 +11,7 @@ import math
 import gzip
 import getopt
 import os.path
+import collections
 
 #define help message
 def usage():
@@ -45,8 +46,8 @@ def usageAndDie(err):
 #parse command arguments / options
 try: 
   opts, args = getopt.getopt(sys.argv[1:], 
-    "u:j:d:q:o:",
-    ["uptagBarcodeFile=","minJaccard=","maxDiff=","minQual=","out=","help"]
+    "u:j:m:d:q:o:",
+    ["uptagBarcodeFile=","minJaccard=","minMatches=","maxDiff=","minQual=","out=","help"]
   )
 except getopt.GetoptError as err:
   usageAndDie(err)
@@ -54,6 +55,7 @@ except getopt.GetoptError as err:
 #define default options
 uptagFile=None
 minJaccard=0.3
+minMatches
 maxDiff=2
 minQual=100
 outfile="clusters.csv.gz"
@@ -70,6 +72,11 @@ for o, a in opts:
       minJaccard=float(a)
     except:
       usageAndDie("ERROR: minJaccard must be a number")
+  elif o in ("-m","--minMatches"):
+    try:
+      minMatches=int(a)
+    except:
+      usageAndDie("ERROR: minMatches must be an integer number")
   elif o in ("-d","--maxDiff"):
     try:
       maxDiff=int(a)
@@ -100,6 +107,8 @@ if not uptagFile is None and not os.path.exists(uptagFile):
   usageAndDie("ERROR: The file "+uptagFile+" does not exist")
 if minJaccard > 1 or minJaccard <= 0:
   usageAndDie("ERROR: minJaccard must be between 0 and 1")
+if minMatches < 1:
+  usageAndDie("ERROR: minMatches must be at least 1")
 if maxDiff < 0 or maxDiff > 3:
   usageAndDie("ERROR: maxDiff must be between 0 and 3")
 if minQual < 1:
@@ -175,7 +184,10 @@ def getClusterForRead(rid):
   return rid2cid.get(rid) #this returns None if it doesn't exist
 
 def getReadsForCluster(cid):
-  return cid2rids[cid] #this throws an error if it doesn't exist
+  if cid is None:
+    return None
+  else:
+    return cid2rids[cid] #this throws an error if it doesn't exist
 
 #edit distance pairs
 #this is a list of dictionaries (for fast searching)
@@ -274,31 +286,17 @@ if not uptagFile is None:
 # SEED CLUSTERING #
 ###################
 
-# def varMatrix(rids):
-#   joint = {}
-#   for rid in rids:
-#     for key,val in rid2geno[rid].items():
-#       if key in joint:
-#         joint[key].extend([val])
-#       else:
-#         joint[key]=[val]
-#   return joint
-
-
 def varMatrix(rids,penalty=0):
   genos = [rid2geno[rid] for rid in rids]
   muts = []
+  #calculate union set of all mutations across the reads
   for geno in genos:
     muts |= geno.keys()
-  varMat=[[geno.get(m,penalty) for m in muts] for geno in genos]
+  #variant matrices contain quality scores. Indexing: varMat[mutation][read]
+  varMat=[[geno.get(m,penalty) for geno in genos] for m in muts]
+  # varMat=[[geno.get(m,penalty) for m in muts] for geno in genos]
   return list(muts),varMat
 
-# def filterSeqError(varMat):
-#   muts=[]
-#   for mut,qs in varMat.items():
-#     if len(qs) > 1 or sum(qs) > minQual:
-#       muts.extend([mut])
-#   return { mut : varMat[mut] for mut in muts }
 
 def filterSeqError(muts,varMat):
   idx=[]
@@ -308,10 +306,122 @@ def filterSeqError(muts,varMat):
       idx.append(i)
   return ([muts[i] for i in idx], [varMat[i] for i in idx])
 
+def calcJaccard(qs1,qs2):
+  inters = 0
+  union = 0
+  for i in range(len(qs1)):
+    if qs1[i] > 0 and qs2[i] > 0:
+      inters += 1
+    if qs1[i] > 0 or qs2[i] > 0:
+      union += 1
+  jaccard = inters/union if union > 0 else 1
+  return jaccard, inters, union
+
+
+##################
+# SEED CLUSTERING
+##################
 
 #iterate over pairs at edit distance 0
 for rids in preClusters:
   muts,varMat = varMatrix(rids)
   muts,varMat = filterSeqError(muts,varMat)
   
+  for i in range(1,len(rids)):
+    rid1=rids[i]
+    qs1=[varMat[m][i] for m in range(len(muts))]
+    for j in range(i):
+      rid2=rids[j]
+      markAsKnown(rid1,rid2)
+      qs2=[varMat[m][j] for m in range(len(muts))]
+      jacc,inters,union = calcJaccard(qs1,qs2)
+      #if both are WT or thresholds are passed, accept.
+      if union == 0 or (jacc > minJaccard and inters > minMatches):
+        addLink(rid1,rid2)
+
+#################
+# MAIN CLUSTERING
+#################
+
+for ed in range(1,maxDiff+1):
+  print("Processing edit distance %d"%ed)
+  for pairID in edistPairs[ed].keys():
+    #if the pair is already known, we're done
+    if pairID in knownRIDPairs:
+      continue
+    rid1,rid2 = pairID.split("-")
+    markAsKnown(rid1,rid2)
+    #fetch the associated cluster ids
+    cid1 = getClusterForRead(rid1)
+    cid2 = getClusterForRead(rid2)
+    #if they're already clustered together, we're done
+    if (not cid1 is None and cid1 == cid2):
+      continue
+    #get the members of the cluster
+    cluster1 = getReadsForCluster(cid1)
+    if cluster1 is None: cluster1 = [rid1]
+    cluster2 = getReadsForCluster(cid2)
+    if cluster2 is None: cluster2 = [rid2]
+    #compare sizes
+    size1 = len(cluster1)
+    size2 = len(cluster2)
+    sizeDispro = abs(math.log2(size1/size2))
+    #if the sizes are not sufficiantly different, we're done
+    # if sizeDispro < 2**(ed-3):
+    if sizeDispro < ed:
+      continue
+    #otherwise check jaccard as before.
+    muts,varMat = varMatrix(cluster1+cluster2)
+    muts,varMat = filterSeqError(muts,varMat)
+    qs1=[sum([varMat[m][i] for i in range(size1)]) for m in range(len(muts))]
+    qs2=[sum([varMat[m][i] for i in range(size1,size1+size2)]) for m in range(len(muts))]
+    jacc,inters,union = calcJaccard(qs1,qs2)
+    if union == 0 or jacc > minJaccard:
+      addLink(rid1,rid2)
+
+
+##########################
+# FORM CONSENSUS GENOTYPES
+##########################
+
+finalGenos = {}
+for cid,rids in cid2rids.items():
+  muts,varMat = varMatrix(rids,-minQual)
+  #make final variant calls
+  mutCall = [muts[i] for i in range(len(varMat)) if sum(varMat[i]) > 0]
+  if len(mutCall) == 0:
+    finalGenos[cid] = "="
+  else:
+    #sort by nucleotide position
+    mutCall = sorted(mutCall,key=lambda s:int(re.sub("\\D+","",s)))
+    finalGenos[cid] = ";".join(mutCall)
+
+
+#########################
+# FORM CONSENSUS BARCODES
+#########################
+def alignmentConsensus(bcs):
+  #write to fasta
+  #run muscle
+  #read muscle fasta output
+  #get top base at each position
+  #remove gaps
+  #concatenate
+
+finalBCs = {}
+for cid, rids in cid2rids.items():
+  bcs = [rid2bc[rid] for rid in rids]
+  counts = collections.Counter(bcs)
+  maxCount = max(counts.values())
+  topBCs = [k for k,v in counts.items() if v == maxCount]
+  if len(topBCs) > 1:
+    finalBCs[cid]=topBCs[0]
+  else:
+    finalBCs[cid]=alignmentConsensus(bcs)
+
+################
+# WRITE OUTPUT 
+################
+
+
 
