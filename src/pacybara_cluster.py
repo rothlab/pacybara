@@ -10,8 +10,11 @@ import re
 import math
 import gzip
 import getopt
+import os
 import os.path
 import collections
+import tempfile
+from datetime import datetime
 
 #define help message
 def usage():
@@ -37,9 +40,13 @@ GENOFILE              : The bcGenos file
 PRECLUSTFILE          : The bcPreClust file
 """)
 
+def log(msg,file=sys.stdout):
+  t=datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+  print(t+" : "+msg,file=file)
+
 #define helper function to throw errors
 def usageAndDie(err):
-  print(err,file=sys.stderr)
+  log(err,file=sys.stderr)
   usage()
   sys.exit(1)
 
@@ -53,9 +60,12 @@ except getopt.GetoptError as err:
   usageAndDie(err)
 
 #define default options
+# edFile = "m54204U_210624_203217.subreads_ccsMerged_RQ998_clustering/editDistance.csv.gz"
+# genoFile = "m54204U_210624_203217.subreads_ccsMerged_RQ998_extract/genoExtract.csv.gz"
+# preClustFile = "m54204U_210624_203217.subreads_ccsMerged_RQ998_clustering/bcPreclust.fastq.gz"
 uptagFile=None
 minJaccard=0.3
-minMatches
+minMatches=1
 maxDiff=2
 minQual=100
 outfile="clusters.csv.gz"
@@ -205,7 +215,7 @@ preSingles = []
 #  LOAD DATA
 ################
 
-print("Loading data")
+log("Loading data...")
 
 #process edit distance file
 with gzip.open(edFile,"rb") as stream:
@@ -322,11 +332,13 @@ def calcJaccard(qs1,qs2):
 # SEED CLUSTERING
 ##################
 
+log("Performing seed clustering...")
+
 #iterate over pairs at edit distance 0
 for rids in preClusters:
   muts,varMat = varMatrix(rids)
   muts,varMat = filterSeqError(muts,varMat)
-  
+  #iterate over pairs of reads  
   for i in range(1,len(rids)):
     rid1=rids[i]
     qs1=[varMat[m][i] for m in range(len(muts))]
@@ -343,8 +355,10 @@ for rids in preClusters:
 # MAIN CLUSTERING
 #################
 
+log("Performing main clustering...")
+
 for ed in range(1,maxDiff+1):
-  print("Processing edit distance %d"%ed)
+  log("Processing edit distance %d"%ed)
   for pairID in edistPairs[ed].keys():
     #if the pair is already known, we're done
     if pairID in knownRIDPairs:
@@ -384,6 +398,8 @@ for ed in range(1,maxDiff+1):
 # FORM CONSENSUS GENOTYPES
 ##########################
 
+log("Forming consensus genotypes...")
+
 finalGenos = {}
 for cid,rids in cid2rids.items():
   muts,varMat = varMatrix(rids,-minQual)
@@ -400,28 +416,83 @@ for cid,rids in cid2rids.items():
 #########################
 # FORM CONSENSUS BARCODES
 #########################
+
 def alignmentConsensus(bcs):
   #write to fasta
-  #run muscle
-  #read muscle fasta output
+  alignment = []
+  with tempfile.NamedTemporaryFile(mode="w",suffix=".fa") as fasta:
+    for i in range(len(bcs)): fasta.write(f">{i}\n{bcs[i]}\n")
+    fasta.flush()
+    #prepare output file
+    with tempfile.NamedTemporaryFile(mode="r",suffix=".aln") as alnfile:
+      #run muscle
+      retVal = os.system(f"muscle -in {fasta.name} -out {alnfile.name} >/dev/null 2>&1")
+      #read muscle fasta output
+      if retVal == 0:
+        alignment = [line.strip() for line in alnfile if not line.startswith(">")]
+      else:
+        raise Exception("Alignment failed!")
   #get top base at each position
-  #remove gaps
-  #concatenate
+  consensus = ["" for i in range(len(alignment[0]))]
+  for i in range(len(alignment[0])):
+    bases = [alignment[j][i] for j in range(len(alignment))]
+    counts = collections.Counter(bases)
+    maxCount = max(counts.values())
+    consensus[i] = [k for k,v in counts.items() if v == maxCount][0]
+  #remove gaps and concatenate
+  consensusStr = "".join([base for base in consensus if base != "-"])
+  return consensusStr
 
-finalBCs = {}
-for cid, rids in cid2rids.items():
-  bcs = [rid2bc[rid] for rid in rids]
-  counts = collections.Counter(bcs)
-  maxCount = max(counts.values())
-  topBCs = [k for k,v in counts.items() if v == maxCount]
-  if len(topBCs) > 1:
-    finalBCs[cid]=topBCs[0]
-  else:
-    finalBCs[cid]=alignmentConsensus(bcs)
+log("Forming consensus barcodes...")
+
+def calcConsensusBC(rid2bc):
+  consBCs = {}
+  for cid, rids in cid2rids.items():
+    bcs = [rid2bc[rid] for rid in rids]
+    counts = collections.Counter(bcs)
+    maxCount = max(counts.values())
+    topBCs = [k for k,v in counts.items() if v == maxCount]
+    if len(topBCs) == 1:
+      consBCs[cid]=topBCs[0]
+    elif len(topBCs) > 1 and len(rids) == 2:
+      #without quality scores, it's undecidable
+      #FIXME: import qualities and use them to make better call
+      consBCs[cid]=bcs[0]
+    else:
+      consBCs[cid]=alignmentConsensus(bcs)
+  return consBCs
+
+finalBCs = calcConsensusBC(rid2bc)
+finalUptags = calcConsensusBC(rid2uptag) if len(rid2uptag) > 0 else finalBCs
 
 ################
 # WRITE OUTPUT 
 ################
 
+def writeOutput(outfile):
+  singletons = rid2bc.keys() - rid2cid.keys()
+  singletonUptags = rid2uptag if len(rid2uptag) > 0 else rid2bc
+  with gzip.open(outfile,"wb") as stream:
+    #write header
+    stream.write(bytes("virtualBarcode,upBarcode,reads,size,geno\n","utf-8"))
+    for cid in cid2rids.keys():
+      stream.write(bytes(f"{finalBCs.get(cid)},","utf-8"))
+      stream.write(bytes(f"{finalUptags.get(cid)},","utf-8"))
+      rids = cid2rids[cid]
+      readStr = "|".join(rids)
+      stream.write(bytes(f"{readStr},","utf-8"))
+      stream.write(bytes(f"{len(rids)},","utf-8"))
+      stream.write(bytes(f"{finalGenos.get(cid)}\n","utf-8"))
+    for rid in singletons:
+      stream.write(bytes(f"{rid2bc.get(rid)},","utf-8"))
+      stream.write(bytes(f"{singletonUptags.get(rid)},","utf-8"))
+      stream.write(bytes(f"{rid},1,","utf-8"))
+      muts = rid2geno[rid]
+      mutsHQ = [m for m,q in muts.items() if q >= minQual]
+      geno = "=" if len(mutsHQ)==0 else ";".join(mutsHQ)
+      stream.write(bytes(f"{geno}\n","utf-8"))
 
+log(f"Writing output to file {outfile}")
+writeOutput(outfile)
 
+log("Done!")
