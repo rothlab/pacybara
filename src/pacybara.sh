@@ -502,11 +502,11 @@ pacybara_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
 zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
   |uniq -c>"${CLUSTERDIR}/qc/edDistr.txt"
 
-#perform actual clustering and form consensus
-# submitjob.sh -n "${OUTPREFIX}_clustering" -c 12 -m 24G -t 14-00:00:00\
-#   -l "${CLUSTERDIR}/qc/clustering.log" -e "${CLUSTERDIR}/qc/clustering_err.log"\
-#   -q guru -- \
-pacybara_runClustering.R "${CLUSTERDIR}/editDistance.csv.gz" \
+# #perform actual clustering and form consensus
+# # submitjob.sh -n "${OUTPREFIX}_clustering" -c 12 -m 24G -t 14-00:00:00\
+# #   -l "${CLUSTERDIR}/qc/clustering.log" -e "${CLUSTERDIR}/qc/clustering_err.log"\
+# #   -q guru -- \
+pacybara_cluster.py "${CLUSTERDIR}/editDistance.csv.gz" \
   "${EXTRACTDIR}/genoExtract.csv.gz" "${CLUSTERDIR}/bcPreclust.fastq.gz" \
   --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
   --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \
@@ -520,8 +520,14 @@ zcat "${CLUSTERDIR}/clusters.csv.gz"|tail -n +2|cut -f 4 -d,|sort -n\
 pacybara_translate.R "${CLUSTERDIR}/clusters.csv.gz" \
   "$REFFASTA" --orfStart "$ORFSTART" --orfEnd "$ORFEND"
 
+#run soft filtering (keep collisions with dominant clones)
+pacybara_softfilter.R "${CLUSTERDIR}/clusters_transl.csv.gz" \
+  --out "${CLUSTERDIR}/clusters_transl_softfilter.csv.gz"
+
 #run QC analysis
 pacybara_qc.R "${CLUSTERDIR}/clusters_transl.csv.gz" \
   "${EXTRACTDIR}/" "${CLUSTERDIR}/qc"
+pacybara_qc.R "${CLUSTERDIR}/clusters_transl_softfilter.csv.gz" \
+  "${EXTRACTDIR}/" "${CLUSTERDIR}/qc" --softFilter
 
 echo "Done!"

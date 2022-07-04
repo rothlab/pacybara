@@ -61,7 +61,7 @@ fates <- c(
   dominant=sum(out$collision=="collision"),
   `non-dominant`=nrow(rest)
 )
-outpdf <- gsub("\\..+",".pdf",pargs$out)
+outpdf <- gsub("\\.csv\\.gz$",".pdf",pargs$out)
 pdf(outpdf,5,5)
 barplot(fates,
   border=NA,ylab="barcodes with >2CCS",

@@ -39,9 +39,11 @@ p <- add_argument(p, "--orfStart", help="ORF start position",default=207L)
 p <- add_argument(p, "--orfEnd", help="ORF end position",default=2789L)
 p <- add_argument(p, "--minClusterSize", help="Minimum cluster size to filter for",default=2L)
 pargs <- parse_args(p)
+#pargs <- list(clusters="m54204U_210624_203217.subreads_ccsMerged_RQ998_clustering/clusters.csv.gz",reference="../../../templates/references/LPL_M13.fa",orfStart=207,orfEnd=1631,minClusterSize=2)
 
 outfile <- sub("\\.csv.gz$","_transl.csv.gz",pargs$clusters)
 
+cat("Reading input files...\n")
 clusters <- read.csv(pargs$clusters)
 
 fcon <- file(pargs$reference,open="r")
@@ -51,10 +53,21 @@ close(fcon)
 orfSeq <- substr(refSeq,pargs$orfStart,pargs$orfEnd)
 orfLen <- nchar(orfSeq)
 
+#re-calculate collisions
+cat("Calculating barcode collisions...\n")
+tagDups <- function(bcs) {
+  contab <- table(bcs)
+  dupIdx <- hash(names(which(contab > 1)),TRUE)
+  bcs|>sapply(function(bc) if (is.null(dupIdx[[bc]])) "" else "collision")
+}
+clusters$collision <- tagDups(clusters$virtualBarcode)
+clusters$upTagCollision <- tagDups(clusters$upBarcode)
+
 builder <- hgvsParseR::new.hgvs.builder.p(3)
 cbuilder <- hgvsParseR::new.hgvs.builder.c()
 
 #separate out mutations outside of ORF
+cat("Cleaning up genotyopes and separating off-target mutations...\n")
 cleanGenos <- strsplit(clusters$geno,";") |> pbmclapply(function(muts) {
   if (all(muts=="=")) {
     return(c(main=muts,outside=NA))
@@ -88,6 +101,7 @@ cleanGenos <- strsplit(clusters$geno,";") |> pbmclapply(function(muts) {
 # })
 
 
+cat("Translating to amino acid level...\n")
 transl <- pbmclapply(
   cleanGenos$main,
   function(mut) {
@@ -110,6 +124,8 @@ transl <- pbmclapply(
   }, mc.cores=8
 ) |> yogitools::as.df()
 
+
+cat("Formatting and writing results to file...\n")
 out <- cbind(clusters[,c(1:4,6:7,5)],transl,offTarget=cleanGenos$outside)
 
 outcon <- gzfile(outfile,open="w")
@@ -120,7 +136,7 @@ close(outcon)
 outfiltered <- out[which(out$upTagCollision=="" & out$size >= pargs$minClusterSize),c(2,8:14,4)]
 colnames(outfiltered)[[1]] <- "barcode"
 
-outfile <- sub("\\.csv.gz$","_transl_filtered.csv.gz",pargs$clusters)
+outfile <- sub("\\.csv.gz$","_filtered.csv.gz",outfile)
 outcon <- gzfile(outfile,open="w")
 write.csv(outfiltered,outcon,row.names=FALSE)
 close(outcon)
