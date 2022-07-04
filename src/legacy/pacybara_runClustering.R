@@ -93,6 +93,9 @@ new.fastClust <- function(minJaccard=0.3) {
     #total ED 2: Min. dispro 0.5
     #total ED 3: Min. dispro 1?
     #total ED 4: reject
+    #FIXME: Conservatively, both being of small size should be no excuse.
+    # This just invites chaining!!
+    # sizeCriterion <- sizeDispro >= 2^(bcDist-3)
     sizeCriterion <- max(size1,size2) <= 4 || sizeDispro >= 2^(bcDist-3)
 
     if (totalDist == 0 || (sizeCriterion && jaccard >= minJaccard)) {
@@ -230,6 +233,7 @@ loadBarcodes <- function(preClustFile) {
   setNames(seqLines,bcReadName)
 }
 barcodes <- loadBarcodes(preClustFile)
+#List of lists of all of read IDs with identical barcodes
 preClustsAll <- names(barcodes)|>strsplit("\\|")
 preClusts <- preClustsAll[sapply(preClustsAll,length) > 1]
 
@@ -309,6 +313,8 @@ judgeConnection <- function(id1,id2,bcDist) {
   #check if they are are already part of clusters
   varMatrix1 <- getClusterVarMatrix(id1)
   varMatrix2 <- getClusterVarMatrix(id2)
+
+  #TODO: check if they are already part of the same cluster and if so, skip
 
   #cluster sizes
   clSize1 <- ncol(varMatrix1)-1
