@@ -71,6 +71,7 @@ if (!pargs$softFilter) {
   dev.off()
   
 } else {
+  sizes <- 1:(sizeDistro|>names()|>as.integer()|>max())
   sizeDistro <- setNames(sizeDistro[as.character(1:max(sizes))],1:max(sizes))
   sizeDistro[is.na(sizeDistro)] <- 0
   if (max(sizes) > 20) {
@@ -79,7 +80,7 @@ if (!pargs$softFilter) {
       `>=20`=sum(sizeDistro[20:length(sizeDistro)])
     )
   }
-  pdf(paste0(pargs$outdir,"clusterSizes.pdf"),7,5)
+  pdf(paste0(pargs$outdir,"clusterSizes_softFilter.pdf"),7,5)
   opar <- par(las=3)
   sizeDistro|>barplot(border=NA,
     xlab="size",ylab="count",

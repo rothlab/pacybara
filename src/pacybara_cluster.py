@@ -469,6 +469,9 @@ finalUptags = calcConsensusBC(rid2uptag) if len(rid2uptag) > 0 else finalBCs
 # WRITE OUTPUT 
 ################
 
+#FIXME: need to add collision columns. Maybe do that in the translation
+#   script though?
+
 def writeOutput(outfile):
   singletons = rid2bc.keys() - rid2cid.keys()
   singletonUptags = rid2uptag if len(rid2uptag) > 0 else rid2bc
