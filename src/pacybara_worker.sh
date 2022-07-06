@@ -193,15 +193,18 @@ EXTRACTDIR="${WORKSPACE}/${CHUNKPREFIX}_extract/"
 mkdir -p $EXTRACTDIR
 
 #align to template
-if [[ ! -s "$ALNFILE" ]]; then
-  echo "Running alignment..."
-  # bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -u - \
-  #   | samtools sort -o "$ALNFILE" - 
-  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
-  # dieOnError $? !!
-else
-  echo "Using existing alignment"
+# if [[ ! -s "$ALNFILE" ]]; then
+#   echo "Running alignment..."
+#   # bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -u - \
+#   #   | samtools sort -o "$ALNFILE" - 
+#   bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
+#   # dieOnError $? !!
+# else
+#   echo "Using existing alignment"
 fi
+echo "Running alignment..."
+bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
+
 
 # #generate alignment stats
 # if [[ ! -s "${ALNFILE}_stats" ]]; then
@@ -215,17 +218,19 @@ fi
 # fi
 
 #extract barcodes
-if [[ ! -s "${EXTRACTDIR}/bcExtract_1.fastq.gz" ]]; then
-  echo "Extracting barcodes..."
-  pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\
-    --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
-  #calculate barcode length distributions
-  # zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
-  #   sort -n|uniq -c>"${EXTRACTDIR}/bc1len_distr.txt"
-  # zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
-  #   sort -n|uniq -c>"${EXTRACTDIR}/bccombolen_distr.txt"
-else 
-  echo "Using existing extracted barcodes"
-fi
-
+# if [[ ! -s "${EXTRACTDIR}/bcExtract_1.fastq.gz" ]]; then
+#   echo "Extracting barcodes..."
+#   pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\
+#     --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
+#   #calculate barcode length distributions
+#   # zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
+#   #   sort -n|uniq -c>"${EXTRACTDIR}/bc1len_distr.txt"
+#   # zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
+#   #   sort -n|uniq -c>"${EXTRACTDIR}/bccombolen_distr.txt"
+# else 
+#   echo "Using existing extracted barcodes"
+# fi
+echo "Extracting barcodes..."
+pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\  --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
+  
 echo "Done!"
