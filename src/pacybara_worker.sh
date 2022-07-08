@@ -190,7 +190,7 @@ ALNFILE="${WORKSPACE}/${CHUNKPREFIX}_aligned.bam"
 EXTRACTDIR="${WORKSPACE}/${CHUNKPREFIX}_extract/"
 
 #create the directory
-mkdir -p $EXTRACTDIR
+mkdir -p "$EXTRACTDIR"
 
 #align to template
 # if [[ ! -s "$ALNFILE" ]]; then
@@ -231,6 +231,7 @@ bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$AL
 #   echo "Using existing extracted barcodes"
 # fi
 echo "Extracting barcodes..."
-pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR"\  --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
+pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR" \
+  --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
   
 echo "Done!"
