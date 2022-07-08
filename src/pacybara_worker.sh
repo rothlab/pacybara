@@ -201,7 +201,7 @@ mkdir -p $EXTRACTDIR
 #   # dieOnError $? !!
 # else
 #   echo "Using existing alignment"
-fi
+# fi
 echo "Running alignment..."
 bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
 
