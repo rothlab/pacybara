@@ -3,7 +3,7 @@
 2. Install [`clusterutil`](https://github.com/jweile/clusterutil) 
 3. Make sure the following R version 4 or higher and the following R packages are installed: `yogitools`, `yogiseq`, `hgvsParseR`,`argparser`,`pbmcapply`,`hash`,`bitops`
 	* yogitools, yogiutil and hgvsParser can be installed via `remotes::install_github("jweile/yogitools")`, etc
-4. Make sure emboss, bwa, bowtie2 and samtools are installed.
+4. Make sure muscle, emboss, bwa, bowtie2 and samtools are installed.
 4. Install [`pacbiotools`](https://github.com/jweile/pacbiotools)
 5. Install [`barseqPro`](https://github.com/jweile/barseqPro) (this includes `pacybara`)
 
