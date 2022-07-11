@@ -102,6 +102,8 @@ for o, a in opts:
 
 if len(args) < 3:
   usageAndDie("ERROR: Missing required arguments!")
+elif len(args) > 3:
+  usageAndDie("Unrecognized additional arguments!")
 edFile = str(args[0])
 genoFile = str(args[1])
 preClustFile = str(args[2])
