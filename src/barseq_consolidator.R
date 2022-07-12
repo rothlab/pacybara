@@ -56,6 +56,10 @@ countFiles <- sapply(samples$sample, function(sid) {
 
 # bcFile <- "pDEST_pool3_subassembly_bc1_varcalls_transl.csv"
 barcodes <- read.csv(pargs$library)
+if (ncol(barcodes) > 9) {
+  cat("Trimming excess columns from library file!\n")
+  barcodes <- barcodes[,1:9]
+}
 
 countData <- do.call(data.frame,lapply(countFiles, function(countsFile) {
   counts <- yogitools::as.df(strsplit(trimws(readLines(countsFile))," +"))
