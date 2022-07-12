@@ -335,6 +335,9 @@ barseq_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
 echo "Calculating enrichment ratios and scores..."
 barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}scores/"
 
+echo "Running QC"
+barseq_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "${WORKSPACE}qc/"
+
 #cleanup temp files
 rm tmp/*&&rmdir tmp
 
