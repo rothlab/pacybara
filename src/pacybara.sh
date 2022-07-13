@@ -19,6 +19,14 @@
 #fail on error, even within pipes; disallow use of unset variables, enable history tracking
 set -euo pipefail -o history -o histexpand
 
+# CHECK FOR SOFTWARE DEPENDENCIES
+for BIN in muscle bwa bowtie2 samtools seqret Rscript python3; do
+  if [[ -z $(command -v $BIN) ]] ; then
+    echo "The required software '$BIN' is not installed!">&2
+    exit 1
+  fi
+done
+
 BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
 
 # BCPOS=153
@@ -30,6 +38,7 @@ MINMATCHES=1
 MAXDIFF=2
 MINQUAL=100
 VIRTUALBC=0
+USEDOWNTAG=0
 QARG=""
 BLACKLIST=""
 
@@ -65,6 +74,8 @@ Usage: pacybara.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>]
                  for a merge to occur. Defaults to $MINJACCARD
 -v|--virtualBC : Use virtual barcodes (fusion of up- and down-tags) 
                  for clustering. Otherwise only use uptags.
+-d|--downTag   : Cluster based on second barcode (i.e. "down-tag") 
+                 instead of first or virtual barcode
 -c|--cpus      : Number of CPUs to use, defaults to $THREADS
 -q|--queue     : The queue (slurm partition) to use
 --blacklist    : A comma-separated list of compute nodes not to be used
@@ -191,6 +202,10 @@ while (( "$#" )); do
       VIRTUALBC=1
       shift
       ;;
+    -d|--downTag)
+      USEDOWNTAG=1
+      shift
+      ;;
     -q|--queue)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
         QARG="-q $2"
@@ -227,6 +242,11 @@ done
 #reset command arguments as only positional parameters
 eval set -- "$PARAMS"
 
+#validate flags
+if [[ "$VIRTUALBC" == 1 && "$USEDOWNTAG" == 1 ]]; then
+  echo "ERROR: --virtualBC and --downTag cannot be used together!">&2
+  exit 1
+fi
 
 #validate positional arguments
 INFASTQ=$1
@@ -323,6 +343,10 @@ function findBarcodPos() {
 
 #find barcode position in reference
 BCPOS=$(findBarcodPos $REFFASTA $BARCODE)
+if [[ ! "$BCPOS" =~ "," ]] && [[ "$USEDOWNTAG" == 1 ]]; then
+  echo "Error: No downtag found, but --downTag option was requested.">&2
+  exit 1
+fi
 #remove barcode from reference
 REFFASTANOBC=$(removeBarcode $REFFASTA $BARCODE)
 #and create an index for the barcodeless reference
@@ -445,8 +469,15 @@ cat("\n")
 
 #Run quick QC of barcode length distributions
 mkdir ${EXTRACTDIR}/qc
+#uptag
 zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
   sort -n|uniq -c>"${EXTRACTDIR}/qc/bc1len_distr.txt"
+#downtag (if exists)
+if [[ -e "${EXTRACTDIR}/bcExtract_2.fastq.gz" ]]; then
+  zcat "${EXTRACTDIR}/bcExtract_2.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
+    sort -n|uniq -c>"${EXTRACTDIR}/qc/bc2len_distr.txt"
+fi
+#virtual barcode
 zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
   sort -n|uniq -c>"${EXTRACTDIR}/qc/bccombolen_distr.txt"
 
@@ -466,6 +497,10 @@ mkdir -p $CLUSTERDIR/qc
 if [[ $VIRTUALBC == 1 ]]; then
   echo "Indexing virtual barcodes..."
   zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacybara_precluster.py\
+    |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
+elif [[ $USEDOWNTAG == 1 ]]; then
+  echo "Indexing downtag barcodes..."
+  zcat "${EXTRACTDIR}/bcExtract_2.fastq.gz"|pacybara_precluster.py\
     |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
 else
   echo "Indexing uptag barcodes..."
@@ -502,12 +537,17 @@ pacybara_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
 zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
   |uniq -c>"${CLUSTERDIR}/qc/edDistr.txt"
 
+if [[ "$USEDOWNTAG" == 1 ]]; then
+  TAGFILE="${EXTRACTDIR}/bcExtract_2.fastq.gz"
+else
+  TAGFILE="${EXTRACTDIR}/bcExtract_1.fastq.gz"
+fi
 # #perform actual clustering and form consensus
 # submitjob.sh -n "${OUTPREFIX}_clustering" -c 12 -m 24G -t 14-00:00:00\
 #   -l "${CLUSTERDIR}/qc/clustering.log" -e "${CLUSTERDIR}/qc/clustering_err.log"\
 #   -q guru -- \
 pacybara_cluster.py \
-  --uptagBarcodeFile "${EXTRACTDIR}/bcExtract_1.fastq.gz" \
+  --uptagBarcodeFile "$TAGFILE" \
   --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \
   --minMatches "$MINMATCHES" --maxDiff "$MAXDIFF" --minQual "$MINQUAL" \
   "${CLUSTERDIR}/editDistance.csv.gz" \
