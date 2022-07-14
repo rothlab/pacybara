@@ -27,12 +27,12 @@ cat("Reading input...\n")
 clusters <- read.csv(pargs$infile)
 
 cat("Indexing...\n")
-bcIdx <- tapply(clusters$size,clusters$virtualBarcode,c)
+bcIdx <- tapply(clusters$size,clusters$upBarcode,c)
 bcIdx <- hash(names(bcIdx),bcIdx)
 
 cat("Calculating clone dominance...\n")
 usable <- do.call(c,sapply(1:nrow(clusters), function(row) {
-  bc <- clusters[row,"virtualBarcode"]
+  bc <- clusters[row,"upBarcode"]
   size <- clusters[row,"size"]
   totSize <- sum(bcIdx[[bc]],na.rm=TRUE)
   if (size/totSize > pargs$minRatio) {
