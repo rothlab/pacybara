@@ -4,9 +4,9 @@
 3. Make sure R version 4 or higher and the following R packages are installed: `yogitools`, `yogiseq`, `hgvsParseR`,`argparser`,`pbmcapply`,`hash`,`bitops`
 	* yogitools, yogiutil and hgvsParser can be installed via `remotes::install_github("jweile/yogitools")`, etc
 4. Make sure python3.8 or higher is installed.
-4. Make sure emboss, bwa, bowtie2, muscle and samtools are installed. (For example via conda).
-4. Install [`pacbiotools`](https://github.com/jweile/pacbiotools)
-5. Install [`barseqPro`](https://github.com/jweile/barseqPro) (this includes `pacybara`)
+5. Make sure emboss, bwa, bowtie2, muscle and samtools are installed. (For example via conda).
+6. Install [`pacbiotools`](https://github.com/jweile/pacbiotools)
+7. Install [`barseqPro`](https://github.com/jweile/barseqPro) (this includes `pacybara`)
 
 
 ## Running pacybara
