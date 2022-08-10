@@ -29,7 +29,22 @@ p <- arg_parser(
 p <- add_argument(p, "counts", help="counts file")
 p <- add_argument(p, "samples", help="sample table file")
 p <- add_argument(p, "outdir", help="output directory")
+p <- add_argument(p, "--wtMed", help="manual override for wildtype median")
+p <- add_argument(p, "--nsMed", help="manual override for nonsense median")
 pargs <- parse_args(p)
+
+if (!is.na(pargs$wtMed)) {
+  pargs$wtMed <- as.numeric(pargs$wtMed)
+  if (is.na(pargs$wtMed)) {
+    stop("--wtMed must be numerical")
+  }
+}
+if (!is.na(pargs$nsMed)) {
+  pargs$nsMed <- as.numeric(pargs$nsMed)
+  if (is.na(pargs$nsMed)) {
+    stop("--nsMed must be numerical")
+  }
+}
 
 # pargs <- list(counts="counts/allCounts.csv",samples="samples.tsv",outdir="scores/")
 
@@ -114,7 +129,13 @@ scores <- do.call(cbind,setNames(lapply(assays, function(assay) {
     sdcol <- sprintf("%s.%s.sd",assay,sCond)
     fcol <- sprintf("%s.%s.allfreq",assay,sCond)
     wtmed <- median(yogitools::fin(lrs[wtclones,lrcol]))
+    if (!is.na(pargs$wtMed)) {
+      wtmed <- pargs$wtMed
+    }
     stopmed <- median(yogitools::fin(lrs[stopclones,lrcol]))
+    if (!is.na(pargs$nsMed)) {
+      stopmed <- pargs$nsMed
+    }
     score <- (lrs[,lrcol]-stopmed)/(wtmed-stopmed)
     score.sd <- lrs[,sdcol]/abs(wtmed-stopmed)
     data.frame(score=score,sd=score.sd,allfreq=lrs[,fcol])
@@ -255,42 +276,7 @@ invisible(lapply(names(varscores),function(mapname) {
   write.csv(varscores[[mapname]],paste0(pargs$outdir,"all_aa_scores_",mapname,".csv"),row.names=FALSE)
 }))
 
-
-
-# panelfun <- function(x,y,...) {
-#   points(x,y,...)
-#   grid(NULL,NULL)
-#   abline(v=0:1,h=0:1,col=c("firebrick3","chartreuse3"),lty="dashed")
-#   corr <- cor(yogitools::fin(cbind(x,y)))[1,2]
-#   text(0.5,0.5,sprintf("R=%.02f",corr),col="blue",cex=1.2)
-# }
-# with(varscores[["Uptake.F5"]],{
-#   scm <- score.multi
-#   scm[scm==score.single] <- NA
-#   pairs(
-#     cbind(score.single,scm,score.infer),
-#     labels=c("single-mutants","average over\nmulti-mutants","inverse\nmultiplicative\nmodel"),
-#     pch=".",col=yogitools::colAlpha(1,0.3),
-#     xlim=c(-.5,1.5),ylim=c(-.5,1.5),lower.panel=panelfun,upper.panel=panelfun
-#   )
-# })
-
-# bioreps <- with(scores[isSingleMut & scores$Uptake.F4.allfreq > 5e-7,],{
-#   do.call(rbind,tapply(1:length(hgvsp),hgvsp,function(is) {
-#     if (length(is)>1) {
-#       t(combn(Uptake.F5.score[is],2))
-#     } else NULL
-#   }))
-# })
-# plot(bioreps,
-#   xlab="replicate clone A score",ylab="replicate clone B score",
-#   pch=".",col=yogitools::colAlpha(1,0.3)
-# )
-# grid(NULL,NULL)
-# abline(v=0:1,h=0:1,col=c("firebrick3","chartreuse3"),lty="dashed")
-# corr <- cor(yogitools::fin(bioreps))[1,2]
-# text(0.5,0.5,sprintf("R=%.02f",corr),col="blue",cex=1.2)
-
+#generate MaveDB output
 jointscores <- setNames(lapply(names(varscores),function(mapname) {
   map <- varscores[[mapname]]
   out <- yogitools::as.df(lapply(1:nrow(map), function(i) with(map[i,],{
@@ -312,15 +298,6 @@ jointscores <- setNames(lapply(names(varscores),function(mapname) {
   #remove wt row
   out[-wtrow,]
 }),names(varscores))
-
-# #normalize to nonsense-WT scale and save in MaveDB format
-# jointscores <- lapply(simple.aa.lr, function(map) {
-#   nonmed <- median(map$mj[grep("Ter$",map$hgvs_pro)])
-#   score <- (map$mj-nonmed)/(-nonmed)
-#   sd <- map$sj/abs(nonmed)
-#   se <- sd/sqrt(map$dfj)
-#   data.frame(hgvs_pro=map$hgvs_pro,score=score,sd=sd,se=se,df=map$dfj)
-# })
 
 invisible(lapply(names(jointscores),function(mapname) {
   write.csv(jointscores[[mapname]],paste0(pargs$outdir,"joint_scores_",mapname,".csv"),row.names=FALSE)
