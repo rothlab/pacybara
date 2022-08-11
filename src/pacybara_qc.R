@@ -171,8 +171,26 @@ barplot(extractQC,border=NA,col=c(3,2,2,2),ylab="CCS reads",main="barcode and ge
 par(op)
 dev.off()
 
-# tallyPos <- gsub("\\D+","",names(aaChangeTally))|>as.integer()
-# inReg <- tallyPos >=706 & tallyPos <= 879
-# aaChangeTally[inReg]|>table()
+
+#### JACKPOT PLOT
+cvars <- gsub("c\\.|\\[|\\]$","",clusters$hgvsc)|>strsplit(";")
+cvarTally <- unlist(cvars)|>table()
+cvarTally <- cvarTally[-which(names(cvarTally)=="=")]|>sort(decreasing=TRUE)
+
+pdf(sprintf("%s/jackpots.pdf",pargs$outdir),10,5)
+cmap <- yogitools::colmap(
+  c(0,2,4,nrow(clusters)/1e4,nrow(clusters)/5e3,nrow(clusters)/1e3),
+  c("firebrick3","gold","chartreuse3","chartreuse3","gold","firebrick3")
+)
+plotcol <- cmap(cvarTally)
+plot(
+  seq(0,1,length.out=length(cvarTally)),as.vector(cvarTally),
+  xlab="fraction of variants",ylab="#clones",col=plotcol,pch=20
+)
+topVars <- cvarTally[cvarTally > nrow(clusters)/5e3]|>head(20)
+labelx <- 1:length(topVars)%%5/6
+segments((1:20)/length(cvarTally),topVars,labelx,col="gray",lty="dotted")
+text(labelx,topVars,names(topVars),pos=4,cex=.7)
+dev.off()
 
 cat("Done!\n")
