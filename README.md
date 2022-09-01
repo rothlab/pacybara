@@ -71,7 +71,7 @@ You should now have the following 9 columns, in the following order:
 1. Prepare a parameter sheet for your run. An example can be found below.
 2. Prepare a folder containing the FASTQ files for your samples. Make sure the names of the FASTQ files match the sample names in the parameter sheet.
 3. The results will be written to the current working directory, so I recommend creating a new directory for this purpose first; e.g. `mkdir barseq_MFG_2022-08-15 && cd $_`.
-4. BarseqPro just takes two arguments, the path to the FASTQ folder and the parameter sheet, e.g. `barseqPro.sh fastqFolder/ parameters.txt`. Again, it is recommended to submit this as a slurm job: `submitjob.sh -n myBarseqJob -c 12 -m 24G -t 36:00:00 -l barseq.log -e barseq.log -- barseqPro.sh fastqFolder/ parameters.txt`. 
+4. BarseqPro just takes two arguments, the path to the FASTQ folder and the parameter sheet, e.g. `barseq.sh fastqFolder/ parameters.txt`. Again, it is recommended to submit this as a slurm job: `submitjob.sh -n myBarseqJob -c 12 -m 24G -t 36:00:00 -l barseq.log -e barseq.log -- barseq.sh fastqFolder/ parameters.txt`. 
 
 Runtime is very dependent on the maxError parameter in the parameter sheet. Allowing for only 1 error is much faster than 2 or 3!
 
