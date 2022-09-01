@@ -103,7 +103,7 @@ invisible(dev.off())
 #plot AllFreq vs CV
 samples <- unique(sub("\\.allfreq","",colnames(lrs)[grep("allfreq$",colnames(lrs))]))
 pdf(paste0(pargs$outdir,"freqCV.pdf"),8.5,11)
-op <- par(mfrow=c(2,2),oma=c(2,2,2,2))
+op <- par(mfrow=c(3,2),oma=c(2,2,2,2))
 for (sample in samples) {
   fcol <- paste0(sample,".allfreq")
   sdcol <- paste0(sample,".sd")
@@ -119,64 +119,67 @@ par(op)
 invisible(dev.off())
 
 
+#find all conditions
 conds <- sub("\\.allfreq$","",colnames(lrs)[grep("allfreq",colnames(lrs))])
-relCond <- conds[order(conds)][[length(conds)]]
+# relCond <- conds[order(conds)][[length(conds)]]
+#iterate over conditions
+for (relCond in conds) {
 
-afCol <- paste0(relCond,".allfreq")
-lrCol <- paste0(relCond,".lr")
+  afCol <- paste0(relCond,".allfreq")
+  lrCol <- paste0(relCond,".lr")
 
-# hqLRs <- lrs[which(lrs$Uptake.F5.allfreq > 1e-6),]
-hqLRs <- lrs[which(lrs[,afCol] > 1e-6),]
+  #apply frequency filter
+  # hqLRs <- lrs[which(lrs$Uptake.F5.allfreq > 1e-6),]
+  hqLRs <- lrs[which(lrs[,afCol] > 1e-6),]
 
-isSyn <- sapply(strsplit(gsub("p\\.|\\[|\\]","",hqLRs$hgvsp),";"), function(muts) {
-  all(grepl("=$",muts))
-})
-
-wtLRs <- hqLRs[hqLRs$codonChanges=="WT",]
-stopLRs <- hqLRs[grepl("Ter",hqLRs$hgvsp),]
-fsLRs <- hqLRs[grepl("fs",hqLRs$aaChanges),]
-synLRs <- hqLRs[isSyn,]
-misLRs <- hqLRs[!(isSyn | hqLRs$codonChanges=="WT" | grepl("Ter",hqLRs$hgvsp) | grepl("fs",hqLRs$aaChanges)),]
-
-
-pdf(paste0(pargs$outdir,"barseqDistributions_",relCond,".pdf"),7,6)
-op <- par(mfcol=c(3,2))
-breaks <- seq(-5,5,0.05)
-hist(
-  wtLRs[,lrCol],breaks=breaks,
-  col="darkolivegreen3",border=NA,main="WT clones",
-  xlab=sprintf("log10(%s/All)",relCond)
-)
-abline(v=mean(yogitools::fin(wtLRs[,lrCol])),lty="dotted")
-hist(
-  stopLRs[,lrCol],breaks=breaks,
-  col="firebrick3",border=NA,main="Nonsense clones",
-  xlab=sprintf("log10(%s/All)",relCond)
-)
-abline(v=mean(yogitools::fin(stopLRs[,lrCol])),lty="dotted")
-hist(
-  synLRs[,lrCol],breaks=breaks,
-  col="darkolivegreen2",border=NA,main="Synonymous clones",
-  xlab=sprintf("log10(%s/All)",relCond)
-)
-abline(v=mean(yogitools::fin(synLRs[,lrCol])),lty="dotted")
-hist(
-  fsLRs[,lrCol],breaks=breaks,
-  col="firebrick4",border=NA,main="Frameshift clones",
-  xlab=sprintf("log10(%s/All)",relCond)
-)
-abline(v=mean(yogitools::fin(fsLRs[,lrCol])),lty="dotted")
-hist(
-  misLRs[,lrCol],breaks=breaks,
-  col="gray",border=NA,main="Missense clones",
-  xlab=sprintf("log10(%s/All)",relCond)
-)
-abline(v=mean(yogitools::fin(misLRs[,lrCol])),lty="dotted")
-par(op)
-invisible(dev.off())
+  #get subgroups of variants (WT, stop, frameshift, synonymous, missense)
+  isSyn <- sapply(strsplit(gsub("p\\.|\\[|\\]","",hqLRs$hgvsp),";"), function(muts) {
+    all(grepl("=$",muts))
+  })
+  wtLRs <- hqLRs[hqLRs$codonChanges=="WT",]
+  stopLRs <- hqLRs[grepl("Ter",hqLRs$hgvsp),]
+  fsLRs <- hqLRs[grepl("fs",hqLRs$aaChanges),]
+  synLRs <- hqLRs[isSyn,]
+  misLRs <- hqLRs[!(isSyn | hqLRs$codonChanges=="WT" | grepl("Ter",hqLRs$hgvsp) | grepl("fs",hqLRs$aaChanges)),]
 
 
+  pdf(paste0(pargs$outdir,"barseqDistributions_",relCond,".pdf"),8.5,11)
+  op <- par(mfcol=c(3,2),oma=c(10,2,2,2),mar=c(5,4,1,1))
+  breaks <- seq(-5,5,0.05)
+  hist(
+    wtLRs[,lrCol],breaks=breaks,
+    col="darkolivegreen3",border=NA,main="WT clones",
+    xlab=sprintf("log10(%s/All)",relCond)
+  )
+  abline(v=mean(yogitools::fin(wtLRs[,lrCol])),lty="dotted")
+  hist(
+    stopLRs[,lrCol],breaks=breaks,
+    col="firebrick3",border=NA,main="Nonsense clones",
+    xlab=sprintf("log10(%s/All)",relCond)
+  )
+  abline(v=mean(yogitools::fin(stopLRs[,lrCol])),lty="dotted")
+  hist(
+    synLRs[,lrCol],breaks=breaks,
+    col="darkolivegreen2",border=NA,main="Synonymous clones",
+    xlab=sprintf("log10(%s/All)",relCond)
+  )
+  abline(v=mean(yogitools::fin(synLRs[,lrCol])),lty="dotted")
+  hist(
+    fsLRs[,lrCol],breaks=breaks,
+    col="firebrick4",border=NA,main="Frameshift clones",
+    xlab=sprintf("log10(%s/All)",relCond)
+  )
+  abline(v=mean(yogitools::fin(fsLRs[,lrCol])),lty="dotted")
+  hist(
+    misLRs[,lrCol],breaks=breaks,
+    col="gray",border=NA,main="Missense clones",
+    xlab=sprintf("log10(%s/All)",relCond)
+  )
+  abline(v=mean(yogitools::fin(misLRs[,lrCol])),lty="dotted")
+  par(op)
+  invisible(dev.off())
 
+}
 
 # stops <- unlist(sapply(strsplit(stopLRs[which(stopLRs$Surface.F4.lr > -0.5),"aaChanges"],"\\|"),function(muts){
 #   muts <- muts[grep("\\*$",muts)]
@@ -185,6 +188,7 @@ invisible(dev.off())
 # }))
 # sort(table(stops),decreasing=TRUE)
 
+### Gather data for read fate plot
 
 excFile <- sub("allCounts.csv$","exceptions.txt",pargs$counts)
 nmFile <- sub("allCounts.csv$","noMatch.csv",pargs$counts)
@@ -217,8 +221,8 @@ if (pargs$deCumufy) {
 rawCounts <- nmTable[excSampleD,]
 rest <- rawCounts$totalReads-(failedExtraction+noMatch+ambig)
 
-pdf(paste0(pargs$outdir,"readFates.pdf"),7,6)
-op <- par(las=3,mar=c(12,4,1,1))
+pdf(paste0(pargs$outdir,"readFates.pdf"),8.5,11)
+op <- par(las=3,mar=c(12,4,1,1),oma=c(10,2,2,2))
 plotcols=c("firebrick3","orange","gold","chartreuse3")
 plotData <- rbind(
   failedExtraction=failedExtraction,

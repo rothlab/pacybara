@@ -171,8 +171,80 @@ barplot(extractQC,border=NA,col=c(3,2,2,2),ylab="CCS reads",main="barcode and ge
 par(op)
 dev.off()
 
-# tallyPos <- gsub("\\D+","",names(aaChangeTally))|>as.integer()
-# inReg <- tallyPos >=706 & tallyPos <= 879
-# aaChangeTally[inReg]|>table()
+
+#### JACKPOT PLOT
+cvars <- gsub("c\\.|\\[|\\]$","",clusters$hgvsc)|>strsplit(";")
+cvarTally <- unlist(cvars)|>table()
+cvarTally <- cvarTally[-which(names(cvarTally)=="=")]|>sort(decreasing=TRUE)
+
+pdf(sprintf("%s/jackpots.pdf",pargs$outdir),10,5)
+cmap <- yogitools::colmap(
+  c(0,2,4,nrow(clusters)/1e4,nrow(clusters)/5e3,nrow(clusters)/1e3),
+  c("firebrick3","gold","chartreuse3","chartreuse3","gold","firebrick3")
+)
+plotcol <- cmap(cvarTally)
+plot(
+  seq(0,1,length.out=length(cvarTally)),as.vector(cvarTally),
+  xlab="fraction of variants",ylab="#clones",col=plotcol,pch=20
+)
+topVars <- cvarTally[cvarTally > nrow(clusters)/5e3]|>head(20)
+labelx <- 1:length(topVars)%%5/6
+segments((1:20)/length(cvarTally),topVars,labelx,col="gray",lty="dotted")
+text(labelx,topVars,names(topVars),pos=4,cex=.7)
+dev.off()
+
+
+#### Nucleotide bias plot
+ccTable <- clusters$codonChanges[!grepl("WT|indel|silent",clusters$codonChanges)]|>
+  strsplit("\\|")|>unlist()|>na.omit()|>
+  yogitools::extract.groups("([ACGT]{3})(\\d+)([ACGT]+)")|>
+  as.data.frame()
+colnames(ccTable) <- c("from","pos","to")
+ccTable$pos <- as.integer(ccTable$pos)
+changes <- ccTable[,c(1,3)] |> apply(1,function(row) {
+  ks <- sapply(1:3,function(k){
+    substr(row[[1]],k,k)!=substr(row[[2]],k,k)
+  }) |> which()
+  lapply(ks, function(k) {
+    list(k,substr(row[[1]],k,k),substr(row[[2]],k,k))
+  }) 
+},simplify=FALSE)
+nchanges <- sapply(changes,length)
+singleChanges <- do.call(c,changes[nchanges==1])
+multiChanges <- do.call(c,changes[nchanges>1])
+
+countChanges <- function(changeList) {
+  mat <- array(0, dim=list(4,4,3),
+    dimnames=list(c("A","C","G","T"),c("A","C","G","T"),1:3)
+  )
+  lapply(changeList, function(ch) {
+    mat[ch[[2]],ch[[3]],ch[[1]]] <<- mat[ch[[2]],ch[[3]],ch[[1]]]+1
+  }) |> invisible()
+  apply(mat,c(1,3),function(x)x/sum(x))
+}
+
+singleMat <- countChanges(singleChanges)
+multiMat <- countChanges(multiChanges)
+cmap <- yogitools::colmap(c(0,1),c("white","steelblue3"))
+
+drawMat <- function(mat,main="") {
+  plot(NA,type="n",xlim=c(0,4),ylim=c(0,4),
+    xlab="from",ylab="to",axes=FALSE,main=main
+  )
+  axis(1,at=(1:4)-.5,c("A","C","G","T"))
+  axis(2,at=(4:1)-.5,c("A","C","G","T"))
+  xs <- rep(1:4,each=4)
+  ys <- rep(4:1,4)
+  rect(xs-1,ys-1,xs,ys,col=cmap(mat),border=NA)
+  text(xs-.5,ys-.5,sprintf("%.01f%%",mat*100))
+}
+
+pdf(sprintf("%s/nuclBias.pdf",pargs$outdir),9,6)
+layout(cbind(1:2,3:4,5:6))
+for (i in 1:3) {
+  drawMat(singleMat[,,i],paste("SNP pos.",i))
+  drawMat(multiMat[,,i],paste("POP pos.",i))
+}
+dev.off()
 
 cat("Done!\n")
