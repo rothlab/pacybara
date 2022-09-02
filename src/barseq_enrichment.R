@@ -31,6 +31,8 @@ p <- add_argument(p, "samples", help="sample table file")
 p <- add_argument(p, "outdir", help="output directory")
 p <- add_argument(p, "--wtMed", help="manual override for wildtype median")
 p <- add_argument(p, "--nsMed", help="manual override for nonsense median")
+p <- add_argument(p, "--freqFilter", help="frequency filter cutoff",default=5e-7)
+p <- add_argument(p, "--bnFilter", help="bottleneck filter count cutoff",default=-Inf)
 pargs <- parse_args(p)
 
 if (!is.na(pargs$wtMed)) {
@@ -44,6 +46,12 @@ if (!is.na(pargs$nsMed)) {
   if (is.na(pargs$nsMed)) {
     stop("--nsMed must be numerical")
   }
+}
+if (!is.numeric(pargs$freqFilter) || pargs$freqFilter >= 1 || pargs$freqFilter < 0) {
+  stop("--freqFilter must be numeric and must be between 0 and 1!")
+}
+if (!is.numeric(pargs$bnFilter)) {
+  stop("--bnFilter must be numeric!")
 }
 
 # pargs <- list(counts="counts/allCounts.csv",samples="samples.tsv",outdir="scores/")
@@ -82,13 +90,20 @@ join.datapoints <- function(ms,sds,dfs,ws=(1/sds)/sum(1/sds)) {
 }
 
 #calculate frequencies
-freqs <- apply(counts[,-(1:9)],2,function(col) col/sum(col))
+countsOnly <- counts[,-(1:9)]
+freqs <- apply(countsOnly,2,function(col) col/sum(col))
 
 #collapse replicates
 conds <- with(samples,tapply(sample,with(samples,paste(assay,condition,sep=".")),c))
 msd <- do.call(cbind,pbmclapply(conds,function(smpl) {
   data.frame(
     mean=apply(freqs[,smpl],1,mean),
+    sd=apply(freqs[,smpl],1,sd)
+  )
+},mc.cores=6))
+countMeans <- do.call(cbind,pbmclapply(conds,function(smpl){
+  data.frame(
+    mean=apply(countsOnly[,smpl],1,mean),
     sd=apply(freqs[,smpl],1,sd)
   )
 },mc.cores=6))
@@ -121,9 +136,10 @@ write.csv(lrs,paste0(pargs$outdir,"allLRs.csv"),row.names=FALSE)
 #normalize to lrs to scores
 scores <- do.call(cbind,setNames(lapply(assays, function(assay) {
   sConds <- setdiff(unique(samples[samples$assay==assay,"condition"]),"All")
-  wellmeasured <- msd[,paste0(assay,".All.mean")] > 1e-6
-  wtclones <- which(lrs$hgvsc=="c.=" & wellmeasured)
-  stopclones <- which(grepl("Ter$",lrs$hgvsp) & wellmeasured)
+  wellmeasured <- msd[,paste0(assay,".All.mean")] > pargs$freqFilter
+  noBN <- apply(countMeans[,grep(paste0(assay,".*mean"),colnames(countMeans))],1,function(x) all(x >= pargs$bnFilter))
+  wtclones <- which(lrs$hgvsc=="c.=" & wellmeasured & noBN)
+  stopclones <- which(grepl("Ter$",lrs$hgvsp) & wellmeasured & noBN)
   do.call(cbind,setNames(lapply(sConds, function(sCond) {
     lrcol <- sprintf("%s.%s.lr",assay,sCond)
     sdcol <- sprintf("%s.%s.sd",assay,sCond)
@@ -182,6 +198,7 @@ varscores <- do.call(c,lapply(assays, function(assay) {
     scol <- sprintf("%s.%s.score",assay,sCond)
     sdcol <- sprintf("%s.%s.sd",assay,sCond)
     fcol <- sprintf("%s.%s.allfreq",assay,sCond)
+    ccol <- sprintf("%s.%s.mean",assay,sCond)
 
     #for each aa change mutation:
     out <- do.call(rbind,pbmclapply(allmuts, function(mut) {
@@ -192,7 +209,9 @@ varscores <- do.call(c,lapply(assays, function(assay) {
       } else {
         idxs <- singleIdx[[mut]]
       }
-      idxs <- idxs[scores[idxs,fcol] > 5e-7]
+      ffPass <- scores[idxs,fcol] >= pargs$freqFilter
+      bnPass <- countMeans[idxs,ccol] >= pargs$bnFilter
+      idxs <- idxs[ffPass & bnPass]
       if (length(idxs) > 0) {
         singleOut <- setNames(join.datapoints(
           scores[idxs,scol],
@@ -205,7 +224,9 @@ varscores <- do.call(c,lapply(assays, function(assay) {
 
       #next check for multi-mutant to average over
       midxs <- margIdx[[mut]]
-      midxs <- midxs[which(scores[midxs,fcol] > 5e-7)]
+      ffPass <- scores[midxs,fcol] >= pargs$freqFilter
+      bnPass <- countMeans[midxs,ccol] >= pargs$bnFilter
+      midxs <- midxs[which(ffPass & bnPass)]
       if (length(midxs) > 0) {
         multiOut <- setNames(join.datapoints(
           scores[midxs,scol],
