@@ -332,8 +332,19 @@ done
 echo "Consolidating counts from all samples..."
 barseq_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
 
+if [[ -n $BNFILTER ]]; then
+  BNARG="--bnFilter $BNFILTER"
+else
+  BNARG=""
+fi
+if [[ -n $FREQFILTER ]]; then
+  FFARG="--freqFilter $FREQFILTER"
+else 
+  FFARG=""
+fi
+
 echo "Calculating enrichment ratios and scores..."
-barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}scores/"
+barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}scores/" $FFARG $BNARG
 
 echo "Running QC"
 barseq_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "${WORKSPACE}qc/"
