@@ -121,6 +121,10 @@ BCMAXERR=1
 REVCOMP=0
 #Whether the sequencing run uses paired-end mode. 1=yes, 0=no
 PAIREDEND=0
+#Frequency filter cutoff. The minimum relative frequency required in the nonselect (i.e. "all") condition.
+FREQFILTER=5e-7
+#Bottleneck filter cutoff. The minimum read count required in any select condition. 0 = off
+BNFILTER=0
 #END ARGUMENTS
 
 #BEGIN FLANKING SEQUENCES

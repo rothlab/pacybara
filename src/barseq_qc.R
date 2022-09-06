@@ -26,21 +26,28 @@ p <- arg_parser(
 )
 p <- add_argument(p, "lrs", help="lrs file")
 p <- add_argument(p, "counts", help="counts file")
+p <- add_argument(p, "samples", help="sample table txt file")
 p <- add_argument(p, "outdir", help="output directory")
 p <- add_argument(p, "--deCumufy",help="counteract cumulative counts",flag=TRUE)
 p <- add_argument(p, "--freqFilter", help="frequency filter cutoff",default=5e-7)
 p <- add_argument(p, "--bnFilter", help="bottleneck filter count cutoff",default=-Inf)
 pargs <- parse_args(p)
 
-# pargs <- list(lrs="scores/allLRs.csv",counts="counts/allCounts.csv",outdir="qc/")
+# pargs <- list(lrs="scores/allLRs.csv",counts="counts/allCounts.csv",samples="~/tmp/nishka/samples.txt",outdir="qc/",freqFilter=5e-7,bnFilter=-Inf)
 
 dir.create(pargs$outdir,recursive=TRUE)
 
 lrs <- read.csv(pargs$lrs)
 counts <- read.csv(pargs$counts)
+samples <- read.delim(pargs$samples)
+#substitute dashes in sample names (to account for read.csv)
+samples$sample <- gsub("-",".",samples$sample)
 
-cmat <- counts[,grep("Rep",colnames(counts))]
-snames <- tapply(colnames(cmat),gsub("\\.Rep.*","",colnames(cmat)),c)
+
+cmat <- counts[,samples$sample]
+# cmat <- counts[,grep("Rep",colnames(counts))]
+snames <- with(samples,tapply(sample,paste(assay,condition,sep="."),c))
+# snames <- tapply(colnames(cmat),gsub("\\.Rep.*","",colnames(cmat)),c)
 cmeans <- do.call(cbind,lapply(snames, function(cols) {
   apply(cmat[,cols],1,mean)
 }))
@@ -138,7 +145,8 @@ for (relCond in conds) {
   #apply frequency filter
   # hqLRs <- lrs[which(lrs$Uptake.F5.allfreq > 1e-6),]
   ffPass <- lrs[,afCol] > pargs$freqFilter
-  bnPass <- apply(cmeans,1,function(x) all(x >= pargs$bnFilter))
+  # bnPass <- apply(cmeans,1,function(x) all(x >= pargs$bnFilter))
+  bnPass <- cmeans[,relCond] >= pargs$bnFilter
   hqLRs <- lrs[which(ffPass & bnPass),]
 
   #get subgroups of variants (WT, stop, frameshift, synonymous, missense)
