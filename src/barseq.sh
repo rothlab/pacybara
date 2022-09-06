@@ -347,7 +347,7 @@ echo "Calculating enrichment ratios and scores..."
 barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}scores/" $FFARG $BNARG
 
 echo "Running QC"
-barseq_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "${WORKSPACE}qc/" $FFARG $BNARG
+barseq_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}qc/" $FFARG $BNARG
 
 #cleanup temp files
 rm tmp/*&&rmdir tmp
