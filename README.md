@@ -58,14 +58,48 @@ The output directory will contain multiple items:
     * `clusters_transl_softfilter.csv.gz` is filtered less strictly. It still requires >1 CCS read, but allows clones from barcode collisions as long as they dominate that barcode with at least a 2/3 majority.
   * Within the `*_clustering` directory you will also find a `qc/` subdirectory. This contains a number of QC plots.
 
-### Converting the Pacybara output for use with barseqPro.
-The barseqPro software requires a library of barcode associations. This table can be made using any of the `clusters_transl*` tables, depending on the desired filtering level. I recommend using the `softfilter` version for best results. To convert it to the required format, extract it using gunzip (or similar software) and open it in a spreadsheet software such as `Calc` or `Excel`. Then:
+## Converting the Pacybara output for use with barseqPro.
+The barseqPro software requires a library of barcode associations. This table can be made using any of the `clusters_transl*` tables, depending on the desired filtering level. I recommend using the `softfilter` version for best results. To convert it to the required format,
+you can use the `pacybara_preplib.R` script:
+```bash
+pacybara_preplib.R clusters_transl_softfilter.csv.gz myBarcodeLibrary.csv --mode up2up
+```
+
+Here is a the full help output for the script:
+```
+pacybara_preplib.R --help
+usage: pacybara_preplib.R [--] [--help] [--opts OPTS] [--mode MODE]
+       clusters outfile
+
+Prep Pacybara libraries for use in barseq
+
+positional arguments:
+  clusters    translated clusters csv.gz file
+  outfile     output file name
+
+flags:
+  -h, --help  show this help message and exit
+
+optional arguments:
+  -x, --opts  RDS file containing argument values
+  -m, --mode  translation mode. Valid arguments: up2up, down2down,
+              virt2up, virt2down. 'up2up' directly writes uptag-based
+              clusters to an uptag library. 'down2down' directly writes
+              downtag-based clusters to a downtag library. 'virt2up'
+              converts virtual-barcode-based clusters into an uptag
+              library. 'virt2down' converts virtual-barcode-based
+              clusters into a downtag library. [default: up2up]
+```
+
+### Manual conversion
+Alternatively, you can also do this manually. To do so, extract the `clusters_transl_softfilter.csv.gz` file using gunzip (or similar software) and open it in a spreadsheet software such as `Calc` or `Excel`. Then, assuming you want to use uptags:
 1. Delete the following columns: `virtualBarcode`, `reads`, `collisions`, `upTagCollisions`, and `geno`.
 2. Rename the `upBarcode` column to `barcode`.
 3. Move the `size` column to the end (so that is now column `I`)
 
 You should now have the following 9 columns, in the following order:
 `barcode`, `hgvsc`, `hgvsp`, `codonChanges`, `codonHGVS`, `aaChanges`, `aaChangeHGVS`, `offTarget`, `size`. Save it as a CSV file, for example `myBarcodeLibrary.csv`.
+
 
 ## Running barseqPro
 1. Prepare a parameter sheet for your run. An example can be found below.
