@@ -42,6 +42,11 @@ counts <- read.csv(pargs$counts)
 samples <- read.delim(pargs$samples)
 #substitute dashes in sample names (to account for read.csv)
 samples$sample <- gsub("-",".",samples$sample)
+#adjust to R-convention for numerical column names
+if (!all(is.na(as.numeric(samples$sample)))) {
+ toFix <- which(!is.na(as.numeric(samples$sample))) 
+ samples$sample[toFix] <- paste0("X",samples$sample[toFix])
+}
 
 
 cmat <- counts[,samples$sample]
