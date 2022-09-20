@@ -315,14 +315,14 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
 library(argparser)
 
 # pargs <- list(
-#   sam="LPLM13_head.sam",
-#   ref="LPL_M13.fa",
-#   outdir="./",
+#   sam="../test.sam",
+#   ref="/home/rothlab/nkishore/combined_5_1/ATP7B_pDONR_barcoded_noBC.fa",
+#   outdir="../",
 #   chunkSize=100L,
 #   bcLen=25L,
-#   bcPos="153,1762",
+#   bcPos="153,4627",
 #   orfStart=207L,
-#   orfEnd=1631L
+#   orfEnd=4604L
 # )
 p <- arg_parser(
   "Extract barcodes and genotypes from alignments",

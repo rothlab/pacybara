@@ -136,13 +136,12 @@ else
   RCARG=""
 fi
 
-#TODO:
-#Check that sample names in parameter sheet match fastq names!
-
 #Create output directory for this run
 WORKSPACE=${TITLE}_$(date +%Y%m%d_%H%M%S)/
 mkdir "$WORKSPACE"
+#make convenience copies of the parameter sheet and sample tables
 cp "$PARAMETERS" "$WORKSPACE"
+cp "$SAMPLES" "$WORKSPACE/samples.txt"
 
 #create folders for logs and temporary chunk files
 mkdir -p ${WORKSPACE}logs

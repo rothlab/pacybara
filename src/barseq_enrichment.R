@@ -54,6 +54,7 @@ if (!is.numeric(pargs$bnFilter)) {
   stop("--bnFilter must be numeric!")
 }
 
+# pargs <- list(counts="counts/allCounts.csv",samples="~/tmp/upsamples.txt",outdir="~/tmp/",wtMed=NA,nsMed=NA,freqFilter=5e-7,bnFilter=-Inf)
 # pargs <- list(counts="counts/allCounts.csv",samples="samples.tsv",outdir="scores/")
 
 counts <- read.csv(pargs$counts)
@@ -61,6 +62,11 @@ samples <- read.delim(pargs$samples)
 
 #substitute dashes in sample names (to account for read.csv)
 samples$sample <- gsub("-",".",samples$sample)
+#adjust to R-convention for numerical column names
+if (!all(is.na(as.numeric(samples$sample)))) {
+ toFix <- which(!is.na(as.numeric(samples$sample))) 
+ samples$sample[toFix] <- paste0("X",samples$sample[toFix])
+}
 #remove snvs column
 # counts$snvs <- NULL
 
