@@ -1,10 +1,11 @@
 ## Pre-requisites and installation:
 1. Pacybara and barseqPro require a SLURM HPC cluster.
 2. Install [`clusterutil`](https://github.com/jweile/clusterutil) 
-3. Make sure R version 4 or higher and the following R packages are installed: `yogitools`, `yogiseq`, `hgvsParseR`,`argparser`,`pbmcapply`,`hash`,`bitops`
+3. Make sure R version 4 or higher and the following R packages are installed: [`yogitools`](https://github.com/jweile/yogitools), [`yogiseq`](https://github.com/jweile/yogiseq), [`hgvsParseR`](https://github.com/VariantEffect/hgvsParseR),`argparser`,`pbmcapply`,`hash`,`bitops`
 	* yogitools, yogiutil and hgvsParser can be installed via `remotes::install_github("jweile/yogitools")`, etc
 4. Make sure python3.8 or higher is installed.
 5. Make sure emboss, bwa, bowtie2, muscle and samtools are installed. (For example via conda).
+    * `conda install -c bioconda emboss bwa bowtie2 muscle samtools`
 6. Install [`pacbiotools`](https://github.com/jweile/pacbiotools)
 7. Install [`barseqPro`](https://github.com/jweile/barseqPro) (this includes `pacybara`)
 
