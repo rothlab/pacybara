@@ -2,7 +2,7 @@
 library(bitops)
 library(yogitools)
 library(yogiseq)
-library(hgvsParseR)
+# library(hgvsParseR)
 
 options(stringsAsFactors=FALSE)
 
@@ -158,7 +158,7 @@ extractMatchRanges <- function(samStream) {
 
 
 processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
-      bcPoss=c(153,2812),orfStart=207,orfEnd=2789) {
+      bcPoss=c(153,2812),orfStart=207,orfEnd=2789,barseqMode=0) {
 
   #adjust ORF positions relative to barcode cutouts
   if (any(bcPoss < orfStart)) {
@@ -167,7 +167,11 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
   }
   #calculate the minimum range of positions that needs to be covered
   bcAdj <- bcPoss-(seq_along(bcPoss)-1)*bcLen
-  minRange <- range(c(orfStart,orfEnd,bcAdj,bcAdj+bcLen))
+  if (barseqMode < 1) {
+    minRange <- range(c(orfStart,orfEnd,bcAdj,bcAdj+bcLen))
+  } else {
+    minRange <- c(bcAdj[[barseqMode]]-1,bcAdj[[barseqMode]]+1)
+  }
 
   refCon <- file(refFasta,open="r")
   refSeq <- yogiseq::readFASTA(refCon)[[1]]$toString()
@@ -177,12 +181,15 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
   stream <- yogiseq::new.sam.streamer(sam.file,chunkSize)
 
   #open output streams
-  bcOuts <- lapply(1:length(bcPoss),function(i) {
-    gzfile(sprintf("%s/bcExtract_%d.fastq.gz",outdir,i),open="w")
-  })
-  bcComboOut <- gzfile(sprintf("%s/bcExtract_combo.fastq.gz",outdir),open="w")
-  genoOut <- gzfile(sprintf("%s/genoExtract.csv.gz",outdir),open="w")
-
+  if (barseqMode < 1) {
+    bcOuts <- lapply(1:length(bcPoss),function(i) {
+      gzfile(sprintf("%s/bcExtract_%d.fastq.gz",outdir,i),open="w")
+    })
+    bcComboOut <- gzfile(sprintf("%s/bcExtract_combo.fastq.gz",outdir),open="w")
+    genoOut <- gzfile(sprintf("%s/genoExtract.csv.gz",outdir),open="w")
+  } else {
+    bcOut <- gzfile(sprintf("%s/bcExtract_%d.fastq.gz",outdir,barseqMode),open="w")
+  }
   #error counter
   exceptions <- yogitools::new.counter()
 
@@ -250,7 +257,11 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
         if (is.null(x) || !("barcodes" %in% names(x))) return(0) 
         else nrow(x$barcodes)
       })
-      missingBC <- numBCFound < length(bcPoss)
+      if (barseqMode < 1) {
+        missingBC <- numBCFound < length(bcPoss)
+      } else {
+        missingBC <- numBCFound < 1
+      }
       #remove entries with missing barcodes
       if (any(missingBC)) {
         exceptions$add("missingBarcode",sum(missingBC))
@@ -265,36 +276,45 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
       }
 
       #write barcodes to output streams
-      for (bcID in 1:length(bcPoss)) {
-        bcs <- cbind(read=rIDs,fetchBC(bcGenos,bcID))
-        cat(toFASTQ(bcs),"\n",file=bcOuts[[bcID]],sep="")
-      }
-      comboBCs <- cbind(read=rIDs,combineBCs(bcGenos))
-      cat(toFASTQ(comboBCs),"\n",file=bcComboOut,sep="")
+      if (barseqMode > 0) {
 
-      #construct genotype descriptor strings (based on HGVS syntax)
-      genoStrs <- sapply(bcGenos,function(bg) {
-        if (!is.null(bg$genotype) && nrow(bg$genotype) > 0) {
-          qualNum <- sapply(bg$genotype$qual,function(q) 
-            as.integer(round(mean(as.integer(charToRaw(q)))))
-          )
-          muts <- sapply(1:nrow(bg$genotype), function(i) with(bg$genotype[i,],{
-            #convert reference position to relative position (wrt ORF)
-            relpos <- refpos-orfStart+1
-            switch(op,
-              sub=sprintf("%d%s>%s:%d",relpos,refbase,readbase,qualNum[[i]]),
-              ins=sprintf("%dins%s:%d",relpos,readbase,qualNum[[i]]),
-              del=sprintf("%ddel:%d",relpos,qualNum[[i]])
+        bcs <- cbind(read=rIDs,fetchBC(bcGenos,barseqMode))
+        cat(toFASTQ(bcs),"\n",file=bcOut,sep="")
+        bcOut
+
+      } else {
+
+        for (bcID in 1:length(bcPoss)) {
+          bcs <- cbind(read=rIDs,fetchBC(bcGenos,bcID))
+          cat(toFASTQ(bcs),"\n",file=bcOuts[[bcID]],sep="")
+        }
+        comboBCs <- cbind(read=rIDs,combineBCs(bcGenos))
+        cat(toFASTQ(comboBCs),"\n",file=bcComboOut,sep="")
+
+        #construct genotype descriptor strings (based on HGVS syntax)
+        genoStrs <- sapply(bcGenos,function(bg) {
+          if (!is.null(bg$genotype) && nrow(bg$genotype) > 0) {
+            qualNum <- sapply(bg$genotype$qual,function(q) 
+              as.integer(round(mean(as.integer(charToRaw(q)))))
             )
-          }))
-          paste(muts,collapse=";")
-        } else "="
-      })
-      #write genotypes to output file
-      write.table(
-        data.frame(read=rIDs,geno=genoStrs), genoOut, 
-        sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE
-      )
+            muts <- sapply(1:nrow(bg$genotype), function(i) with(bg$genotype[i,],{
+              #convert reference position to relative position (wrt ORF)
+              relpos <- refpos-orfStart+1
+              switch(op,
+                sub=sprintf("%d%s>%s:%d",relpos,refbase,readbase,qualNum[[i]]),
+                ins=sprintf("%dins%s:%d",relpos,readbase,qualNum[[i]]),
+                del=sprintf("%ddel:%d",relpos,qualNum[[i]])
+              )
+            }))
+            paste(muts,collapse=";")
+          } else "="
+        })
+        #write genotypes to output file
+        write.table(
+          data.frame(read=rIDs,geno=genoStrs), genoOut, 
+          sep=",", col.names=FALSE, row.names=FALSE, quote=TRUE
+        )
+      }
       
       linesDone <- linesDone + nlines
 
@@ -303,9 +323,13 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
     }
     cat("\n")
   },finally={
-    lapply(bcOuts,close)
-    close(bcComboOut)
-    close(genoOut)
+    if (barseqMode < 1) {
+      lapply(bcOuts,close)
+      close(bcComboOut)
+      close(genoOut)
+    } else {
+      close(bcOut)
+    }
     cat(exceptions$export(),"\n",file=paste0(outdir,"/bcExtract_exceptions.txt"))
   })
 
@@ -336,6 +360,7 @@ p <- add_argument(p, "--bcLen", help="barcode length",default=25L)
 p <- add_argument(p, "--bcPos", help="comma-separated list of barcode positions",default="153,2812")
 p <- add_argument(p, "--orfStart", help="ORF start position",default=207L)
 p <- add_argument(p, "--orfEnd", help="ORF end position",default=2789L)
+p <- add_argument(p, "--barseqMode", help="Whether to run in barseq mode. Setting to it to 1 or 2 will only extract barcode one or two respectively, and not the ORF", default=0L)
 pargs <- parse_args(p)
 
 
@@ -355,7 +380,8 @@ stopifnot(exprs={
 
 processSAMs(pargs$sam,pargs$ref,pargs$outdir,
   chunkSize=pargs$chunkSize,bcLen=pargs$bcLen,bcPoss=bcPoss,
-  orfStart=pargs$orfStart,orfEnd=pargs$orfEnd
+  orfStart=pargs$orfStart,orfEnd=pargs$orfEnd,
+  barseqMode=pargs$barseqMode
 )
 
 cat("\nDone!\n")

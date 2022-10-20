@@ -141,14 +141,26 @@ ALNFILE=${CHUNKDIR}/${CHUNKPREFIX}_refaln.bam
 #STEP1: Align to reference
 echo "Running alignment..."
 if [[ -z $R2FILE ]]; then
-  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $R1FILE \
+  #Use SED to correct SAM format violation by BWA (barcode tag format)
+  #BWA options:
+  # -C            append FASTQ comments ; 
+  # -M            mark shorter hits as secondary ; 
+  # -L INT[,INT]  penalty for 5'- and 3'-end clipping [5,5]
+  # -O INT[,INT]  gap open penalties for deletions and insertions [6,6]
+  # -E INT[,INT]  gap extension penalty; a gap of size k cost '{-O} + {-E}*k' [1,1]
+  # -A INT        score for a sequence match, which scales options -TdBOELU unless overridden [1]
+  # -B INT        penalty for a mismatch [4]
+  # bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $R1FILE \
+  #  | sed -e 's/1:N:0:/BC:Z:/g' \
+  #  | samtools view -b -o "$ALNFILE" - 
+  bwa mem -t $THREADS -M -A 3 -O 6 -E 1 -L 80 "$REFFASTANOBC" $R1FILE \
    | samtools view -b -o "$ALNFILE" - 
 else
-  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $R1FILE $R2FILE\
+  bwa mem -t $THREADS -M -L 80 "$REFFASTANOBC" $R1FILE $R2FILE\
    | samtools view -b -o "$ALNFILE" - 
 fi
 #STEP2: Extract barcode from alignment
 pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR" \
-  --bcLen $BLEN --bcPos $BCPOS 
+  --bcLen $BLEN --bcPos $BCPOS --barseqMode 1
 
 #STEP3: Align barcodes to library

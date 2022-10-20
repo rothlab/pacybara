@@ -166,6 +166,18 @@ REFFASTANOBC=$(removeBarcode $REFFASTA $BARCODE)
 samtools faidx "$REFFASTANOBC"
 bwa index -a is "$REFFASTANOBC"
 
+#also create an index for the barcode library
+#first, pull barcodes from library and write into FASTA file
+LIBSIZE=$(($(cat "$LIBRARY"|wc -l)-1))
+LIBFASTA="${LIBRARY%.csv}.fasta"
+paste -d "\n" <(eval echo "\>bc"{000001..${LIBSIZE}}|tr " " "\n") \
+  <(cut -f1 -d, "$LIBRARY"|tail -n+2|tr -d \") >"$LIBFASTA"
+#then create the index
+samtools faidx "$LIBFASTA"
+bwa index -a is "$LIBFASTA"
+
+# cut -f1 -d, "$LIBRARY"|tail -n+2|tr -d \"
+
 #Create output directory for this run
 WORKSPACE=${TITLE}_$(date +%Y%m%d_%H%M%S)/
 mkdir "$WORKSPACE"
@@ -227,8 +239,10 @@ processChunks() {
     RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log \
       -e ${WORKSPACE}logs/${TAG}.log -t 24:00:00 $BLARG \
       -m 12G -c 4 \
-      barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
-      --maxErr $BCMAXERR --r1 $CHUNK $R2FLAG $LIBRARY)
+      barseq2_worker.sh --reference --bcLen $BCLEN --maxErr $MAXERR \
+      --r1 $CHUNK $R2FLAG --library $LIBRARY
+      # barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
+      # --maxErr $BCMAXERR --r1 $CHUNK $R2FLAG $LIBRARY)
     JOBID=${RETVAL##* }
     if [ -z "$JOBS" ]; then
       #if jobs is empty, set it to the new ID
