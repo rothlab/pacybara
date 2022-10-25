@@ -19,10 +19,21 @@
 #fail on error, even within pipes; disallow use of unset variables, enable history tracking
 set -euo pipefail -o history -o histexpand
 
+### DETERMINE CONDA ENVIRONMENT
+if [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
+  echo "No conda environment detected. "
+  CONDAARG=""
+else
+  echo "Detected conda environment ${CONDA_DEFAULT_ENV}."
+  CONDAARG="--conda $CONDA_DEFAULT_ENV"
+fi
 # CHECK FOR SOFTWARE DEPENDENCIES
 for BIN in muscle bwa bowtie2 samtools seqret Rscript python3; do
   if [[ -z $(command -v $BIN) ]] ; then
-    echo "The required software '$BIN' is not installed!">&2
+    echo "The required software '$BIN' could not be found!">&2
+    if [[ -z $CONDAARG ]]; then
+      echo "Maybe a conda environment needs to be activated?"
+    fi
     exit 1
   fi
 done
@@ -378,7 +389,7 @@ startJobs() {
     echo "Submitting $TAG"
     RETVAL=$(submitjob.sh -n $TAG -l ${CHUNKDIR}/${TAG}.log \
       -e ${CHUNKDIR}/${TAG}.log -t 24:00:00 \
-      -c 4 -m 4G $BLARG \
+      -c 4 -m 4G $BLARG $CONDAARG \
       pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
       --orfStart $ORFSTART --orfEnd $ORFEND -c 4 \
       "$CHUNK" "$REFFASTANOBC" "$CHUNKDIR")
