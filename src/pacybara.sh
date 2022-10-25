@@ -19,25 +19,6 @@
 #fail on error, even within pipes; disallow use of unset variables, enable history tracking
 set -euo pipefail -o history -o histexpand
 
-### DETERMINE CONDA ENVIRONMENT
-if [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
-  echo "No conda environment detected. "
-  CONDAARG=""
-else
-  echo "Detected conda environment ${CONDA_DEFAULT_ENV}."
-  CONDAARG="--conda $CONDA_DEFAULT_ENV"
-fi
-# CHECK FOR SOFTWARE DEPENDENCIES
-for BIN in muscle bwa bowtie2 samtools seqret Rscript python3; do
-  if [[ -z $(command -v $BIN) ]] ; then
-    echo "The required software '$BIN' could not be found!">&2
-    if [[ -z $CONDAARG ]]; then
-      echo "Maybe a conda environment needs to be activated?"
-    fi
-    exit 1
-  fi
-done
-
 BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
 
 # BCPOS=153
@@ -252,6 +233,25 @@ while (( "$#" )); do
 done
 #reset command arguments as only positional parameters
 eval set -- "$PARAMS"
+
+### DETERMINE CONDA ENVIRONMENT
+if [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
+  echo "No conda environment detected. "
+  CONDAARG=""
+else
+  echo "Detected conda environment ${CONDA_DEFAULT_ENV}."
+  CONDAARG="--conda $CONDA_DEFAULT_ENV"
+fi
+# CHECK FOR SOFTWARE DEPENDENCIES
+for BIN in muscle bwa bowtie2 samtools seqret Rscript python3; do
+  if [[ -z $(command -v $BIN) ]] ; then
+    echo "The required software $BIN could not be found!">&2
+    if [[ -z $CONDAARG ]]; then
+      echo "Maybe a conda environment needs to be activated?"
+    fi
+    exit 1
+  fi
+done
 
 #validate flags
 if [[ "$VIRTUALBC" == 1 && "$USEDOWNTAG" == 1 ]]; then
