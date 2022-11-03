@@ -240,7 +240,7 @@ if [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
   CONDAARG=""
 else
   echo "Detected conda environment ${CONDA_DEFAULT_ENV}."
-  CONDAARG="--conda $CONDA_DEFAULT_ENV"
+  CONDAARG="--conda $CONDA_DEFAULT_ENV --skipValidation"
 fi
 # CHECK FOR SOFTWARE DEPENDENCIES
 for BIN in muscle bwa bowtie2 samtools seqret Rscript python3; do
