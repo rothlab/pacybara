@@ -393,6 +393,8 @@ startJobs() {
       pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
       --orfStart $ORFSTART --orfEnd $ORFEND -c 4 \
       "$CHUNK" "$REFFASTANOBC" "$CHUNKDIR")
+    #convert newlines in retval to spaces
+    RETVAL=${RETVAL//$'\n'/ }
     JOBID=${RETVAL##* }
     if [ -z "$JOBS" ]; then
       #if jobs is empty, set it to the new ID
