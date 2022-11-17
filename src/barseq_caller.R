@@ -68,7 +68,7 @@ r1File <- args$r1
 if (!yogitools::canRead(r1File)) {
   stop("Unable to find or read FASTQ file ",r1File)
 }
-filetype <- system2("file",r1File,stdout=TRUE)
+filetype <- system2("file",c("-L",r1File),stdout=TRUE)
 if (!grepl("text|gzip",filetype)) {
   stop("R1 must be fastq or fastq.gz formatted.")
 }
@@ -78,7 +78,7 @@ if (!is.na(r2File)) {
   if (!yogitools::canRead(r1File)) {
     stop("Unable to find or read FASTQ file ",r1File)
   }
-  filetype2 <- system2("file",r1File,stdout=TRUE)
+  filetype2 <- system2("file",c("-L",r2File),stdout=TRUE)
   if (filetype2 != filetype) {
     stop("R1 and R2 must both be either fastq or fastq.gz files!")
   }
@@ -86,7 +86,7 @@ if (!is.na(r2File)) {
 
 outfile <- args$output
 if (is.na(outfile)) {
-  outfile <- sub("\\..*$","_hits.csv.gz",r1File)
+  outfile <- sub("\\.fastq.*$","_hits.csv.gz",r1File)
 }
 
 
