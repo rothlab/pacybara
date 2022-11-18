@@ -17,7 +17,7 @@
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
 
 #fail on error, even within pipes; disallow use of unset variables, enable history tracking
-set -euo pipefail -o history -o histexpand
+set -euo pipefail +H
 
 BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
 
@@ -310,7 +310,7 @@ fi
 
 
 
-function removeBarcode() {
+function removeBarcode {
   INFASTA=$1
   BARCODE=${2:-SWSWSWSWSWSWSWSWSWSWSWSWS}
   #read FASTA file
@@ -328,7 +328,8 @@ function removeBarcode() {
   echo $OUTFASTA
 }
 
-function findBarcodPos() {
+#set +H
+function findBarcodPos {
   INFASTA=$1
   BARCODE=${2:-SWSWSWSWSWSWSWSWSWSWSWSWS}
   #read FASTA file
@@ -414,8 +415,11 @@ checkForFailedJobs() {
   for CHUNK in $CHUNKS; do
     TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
     LOG=${CHUNKDIR}/${TAG}.log
-    STATUS=$(tail -1 $LOG)
-    if [ "$STATUS" != "Done!" ]; then
+    # STATUS=$(tail -1 $LOG)
+    # if [ "$STATUS" != "Done!" ]; then
+    #PBS (as opposed to slurm) appends two additional lines to the end of the log file
+    #so we need to check the last three lines for the success keyword.
+    if ! tail -3 "$LOG"|grep -q "Done!"; then
       echo "Process $TAG failed!">&2
       if [[ -z $FAILEDCHUNKS ]]; then
         FAILEDCHUNKS="$CHUNK"
