@@ -31,25 +31,24 @@ MAXDIFF=2
 MINQUAL=100
 VIRTUALBC=0
 USEDOWNTAG=0
-QARG=""
-BLACKLIST=""
 
 
 #helper function to print usage information
 usage () {
   cat << EOF
 
-pacybara.sh v0.0.1 
+pacybara_nomux.sh v0.0.1 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
-Runs Pacybara
+Runs a non-multiplexed version of Pacybara. This is slower, but doesn't
+require a HPC cluster.
+
 Usage: pacybara.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>] 
    [-e|--orfEnd <ORFEND>] [--minQual <MINQUAL>] 
    [-m|--minMatches <MINMATCHES>] [--maxDiff <MAXDIFF>] 
    [-j|--minJaccard <MINJACCARD>] [-v|--virtualBC]
-   [-c|--cpus <NUMBER>] [-q|--queue <QUEUE>] 
-   [--blacklist {<NODE>,}]
+   [-c|--cpus <NUMBER>]
    <INFASTQ> <FASTA> [<WORKSPACE>]
 
 -b|--barcode   : The barcode degeneracy code sequence, defaults to
@@ -69,8 +68,6 @@ Usage: pacybara.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>]
 -d|--downTag   : Cluster based on second barcode (i.e. "down-tag") 
                  instead of first or virtual barcode
 -c|--cpus      : Number of CPUs to use, defaults to $THREADS
--q|--queue     : The queue (slurm partition) to use
---blacklist    : A comma-separated list of compute nodes not to be used
 <INFASTQ>      : The input fastq.gz file to process
 <FASTA>        : The raw reference fasta file 
 <WORKSPACE>    : The workspace directory. Defaults to 'workspace/'
@@ -197,24 +194,6 @@ while (( "$#" )); do
     -d|--downTag)
       USEDOWNTAG=1
       shift
-      ;;
-    -q|--queue)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        QARG="-q $2"
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -b|--blacklist)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        BLACKLIST=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
       ;;
     --) # end of options indicates that only positional arguments follow
       shift
