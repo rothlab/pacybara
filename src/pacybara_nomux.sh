@@ -349,7 +349,7 @@ gzip -cd $INFASTQ>$INFQEXTRACT
 #RUN WORKER ON EXTRACTED FILE
 pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
   --orfStart $ORFSTART --orfEnd $ORFEND -c 4 \
-  $INFQEXTRACT "$REFFASTANOBC" "$WORKSPACE") \
+  $INFQEXTRACT "$REFFASTANOBC" "$WORKSPACE" \
   2>&1|tee >(gzip -c >"${WORKSPACE}/${OUTPREFIX}_align.log.gz")
 
 #we can now get rid of the extracted file
