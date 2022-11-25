@@ -281,12 +281,6 @@ if ! [[ "$WORKSPACE" =~ $RX ]]; then
   WORKSPACE="${WORKSPACE}/"
 fi
 
-if [[ -z $BLACKLIST ]]; then
-  BLARG=""
-else
-  BLARG="--blacklist $BLACKLIST"
-fi
-
 
 
 function removeBarcode {
