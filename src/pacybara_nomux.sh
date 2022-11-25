@@ -355,11 +355,14 @@ pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
 #we can now get rid of the extracted file
 rm $INFQEXTRACT
 
+#DIRECTORY FOR STORING EXTRACTION RESULTS
+EXTRACTDIR="${WORKSPACE}/${OUTPREFIX}_extract/"
+mkdir -p ${EXTRACTDIR}/qc
+
 #make the exception file name compatible with single-machine execution
 mv ${EXTRACTDIR}/bcExtract_exceptions.txt ${EXTRACTDIR}/exceptions.txt
 
 #Run quick QC of barcode length distributions
-mkdir ${EXTRACTDIR}/qc
 #uptag
 zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
   sort -n|uniq -c>"${EXTRACTDIR}/qc/bc1len_distr.txt"
@@ -372,15 +375,12 @@ fi
 zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
   sort -n|uniq -c>"${EXTRACTDIR}/qc/bccombolen_distr.txt"
 
-#CLEAN UP CHUNKS
-rm -r $CHUNKDIR
-
 
 ############
 #Clustering
 ############
 
-#DIRECTORY FOR STORING EXTRACTION RESULTS
+#DIRECTORY FOR STORING CLUSTERING RESULTS
 CLUSTERDIR="${WORKSPACE}/${OUTPREFIX}_clustering/"
 mkdir -p $CLUSTERDIR/qc
 
