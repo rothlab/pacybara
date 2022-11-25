@@ -152,7 +152,7 @@ if ! [[ -r "$INFQ" ]]; then
   echo "ERROR: Unable to read FASTQ file $INFQ">&2
   exit 1
 fi
-RX='\.fastq$'
+RX='\.fastq(\.gz)?$'
 if ! [[ "$INFQ" =~ $RX ]]; then
    echo 'ERROR: First parameter must be a *.fastq file' >&2
    exit 1
@@ -183,7 +183,7 @@ echo $WORKSPACE
 
 
 #define intermediate files
-CHUNKPREFIX=$(basename $INFQ|sed -r "s/.fastq$//")
+CHUNKPREFIX=$(basename $INFQ|sed -r "s/.fastq(\.gz)?$//")
 #alignment output
 ALNFILE="${WORKSPACE}/${CHUNKPREFIX}_aligned.bam"
 #extracted barcodes file
@@ -203,8 +203,12 @@ mkdir -p "$EXTRACTDIR"
 #   echo "Using existing alignment"
 # fi
 echo "Running alignment..."
-bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
-
+RX='\.fastq\.gz$'
+if [[ "$INFQ" =~ $RX ]]; then
+  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" <(zcat $INFQ) | samtools view -b -o "$ALNFILE" - 
+else
+  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
+fi
 
 # #generate alignment stats
 # if [[ ! -s "${ALNFILE}_stats" ]]; then

@@ -368,87 +368,6 @@ bwa index -a is "$REFFASTANOBC"
 
 #define intermediate files
 OUTPREFIX=$(basename $INFASTQ|sed -r "s/.fastq.gz$//")
-#extracted barcodes file
-# CHUNKDIR="${WORKSPACE}/${OUTPREFIX}_chunks/"
-# mkdir -p $CHUNKDIR
-# mkdir -p ${CHUNKDIR}/logs/
-
-#SPLIT FASTQ INTO CHUNKS
-# echo "Splitting FASTQ file into job packages"
-# zcat "$INFASTQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
-#   "${CHUNKDIR}/$OUTPREFIX"
-
-# CHUNKS=$(ls ${WORKSPACE}/${OUTPREFIX}_chunks/${OUTPREFIX}*.fastq)
-
-# #PROCESS CHUNKS IN PARALLEL
-# startJobs() {
-#   CHUNKS=$1
-#   JOBS=""
-#   for CHUNK in $CHUNKS; do
-#     TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
-#     #start barseq.R job and capture the job-id number
-#     echo "Submitting $TAG"
-#     RETVAL=$(submitjob.sh -n $TAG -l ${CHUNKDIR}/${TAG}.log \
-#       -e ${CHUNKDIR}/${TAG}.log -t 24:00:00 \
-#       -c 4 -m 4G $BLARG $CONDAARG \
-#       pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
-#       --orfStart $ORFSTART --orfEnd $ORFEND -c 4 \
-#       "$CHUNK" "$REFFASTANOBC" "$CHUNKDIR")
-#     #convert newlines in retval to spaces
-#     RETVAL=${RETVAL//$'\n'/ }
-#     JOBID=${RETVAL##* }
-#     if [ -z "$JOBS" ]; then
-#       #if jobs is empty, set it to the new ID
-#       JOBS=$JOBID
-#     else
-#       #otherwise append the id to the list
-#       JOBS=${JOBS},$JOBID
-#     fi
-#   done
-
-#   waitForJobs.sh -v "$JOBS"
-# }
-
-# checkForFailedJobs() {
-#   CHUNKS=$1
-#   FAILEDCHUNKS=""
-#   for CHUNK in $CHUNKS; do
-#     TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
-#     LOG=${CHUNKDIR}/${TAG}.log
-#     # STATUS=$(tail -1 $LOG)
-#     # if [ "$STATUS" != "Done!" ]; then
-#     #PBS (as opposed to slurm) appends two additional lines to the end of the log file
-#     #so we need to check the last three lines for the success keyword.
-#     if ! tail -3 "$LOG"|grep -q "Done!"; then
-#       echo "Process $TAG failed!">&2
-#       if [[ -z $FAILEDCHUNKS ]]; then
-#         FAILEDCHUNKS="$CHUNK"
-#       else
-#         FAILEDCHUNKS="$FAILEDCHUNKS $CHUNK"
-#       fi
-#     fi
-#   done
-#   echo "$FAILEDCHUNKS"
-# }
-
-# echo "Running jobs..."
-# startJobs "$CHUNKS"
-# echo "Validating jobs..."
-# FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
-# #If any jobs failed, try 2 more times
-# TRIES=1
-# while ! [[ -z $FAILEDCHUNKS ]]; do
-#   if [[ $TRIES < 3 ]]; then
-#     echo "Attempting to re-run failed jobs."
-#     startJobs "$FAILEDCHUNKS"
-#     echo "Validating jobs..."
-#     FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
-#     ((TRIES++))
-#   else
-#     echo "ERROR: Exhausted 3 attempts at re-running failed jobs!">&2
-#     exit 1
-#   fi
-# done
 
 #UNZIP INPUT FASTQ FILE
 INFQEXTRACT="${WORKSPACE}/${OUTPREFIX}.fastq"
@@ -457,43 +376,14 @@ gzip -cd $INFASTQ>$INFQEXTRACT
 #RUN WORKER ON EXTRACTED FILE
 pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
   --orfStart $ORFSTART --orfEnd $ORFEND -c 4 \
-  $INFQEXTRACT "$REFFASTANOBC" "$WORKSPACE")
+  $INFQEXTRACT "$REFFASTANOBC" "$WORKSPACE") \
+  2>&1|tee >(gzip -c >"${WORKSPACE}/${OUTPREFIX}_align.log.gz")
 
-#TODO: CONTINUE HERE
+#we can now get rid of the extracted file
+rm $INFQEXTRACT
 
-#DIRECTORY FOR STORING EXTRACTION RESULTS
-EXTRACTDIR="${WORKSPACE}/${OUTPREFIX}_extract/"
-mkdir -p $EXTRACTDIR
-
-#CONSOLIDATE RESULT CHUNKS
-echo "Consolidating alignments and genotypes"
-for CHUNK in $CHUNKS; do
-  #this for loop is just to absolutely make sure the order is preserved
-  TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
-  cat ${CHUNKDIR}${TAG}_extract/bcExtract_1.fastq.gz>>${EXTRACTDIR}/bcExtract_1.fastq.gz
-  if [[ -e ${CHUNKDIR}${TAG}_extract/bcExtract_2.fastq.gz ]]; then
-    cat ${CHUNKDIR}${TAG}_extract/bcExtract_2.fastq.gz>>${EXTRACTDIR}/bcExtract_2.fastq.gz
-  fi
-  cat ${CHUNKDIR}${TAG}_extract/bcExtract_combo.fastq.gz>>${EXTRACTDIR}/bcExtract_combo.fastq.gz
-  cat ${CHUNKDIR}${TAG}_extract/genoExtract.csv.gz>>${EXTRACTDIR}/genoExtract.csv.gz
-done
-
-samtools cat -o "${WORKSPACE}/${OUTPREFIX}_align.bam" ${CHUNKDIR}/*bam
-tar czf "${WORKSPACE}/${OUTPREFIX}_alignLog.tgz" ${CHUNKDIR}/*log
-
-#consolidate exception counts
-Rscript -e '
-options(stringsAsFactors=FALSE)
-lines<-readLines(pipe(paste("cat",paste(commandArgs(TRUE),collapse=" "))))
-mat <- do.call(rbind,lapply(strsplit(lines,","),function(elems) {
-  s<-do.call(rbind,strsplit(elems,"="))
-  setNames(as.integer(trimws(s[,2])),s[,1])
-}))
-tot <- colSums(mat)
-cat(paste(sprintf("%s=%d",names(tot),tot),collapse="\n"))
-cat("\n")
-# print(colSums(mat))
-' ${CHUNKDIR}*/*exceptions.txt>${EXTRACTDIR}/exceptions.txt
+#make the exception file name compatible with single-machine execution
+mv ${EXTRACTDIR}/bcExtract_exceptions.txt ${EXTRACTDIR}/exceptions.txt
 
 #Run quick QC of barcode length distributions
 mkdir ${EXTRACTDIR}/qc
@@ -512,10 +402,10 @@ zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
 #CLEAN UP CHUNKS
 rm -r $CHUNKDIR
 
+
 ############
 #Clustering
 ############
-
 
 #DIRECTORY FOR STORING EXTRACTION RESULTS
 CLUSTERDIR="${WORKSPACE}/${OUTPREFIX}_clustering/"
@@ -571,9 +461,6 @@ else
   TAGFILE="${EXTRACTDIR}/bcExtract_1.fastq.gz"
 fi
 # #perform actual clustering and form consensus
-# submitjob.sh -n "${OUTPREFIX}_clustering" -c 12 -m 24G -t 14-00:00:00\
-#   -l "${CLUSTERDIR}/qc/clustering.log" -e "${CLUSTERDIR}/qc/clustering_err.log"\
-#   -q guru -- \
 pacybara_cluster.py \
   --uptagBarcodeFile "$TAGFILE" \
   --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \
