@@ -1,18 +1,43 @@
+# Pacybara and BarseqPro
+
+Pacybara is a long-read barcode clustering method designed for multiplexed assays of variant effect (MAVEs).
+
+BarseqPro is an accompanying BarSeq MAVE analysis pipeline.
+
 ## Pre-requisites and installation:
-1. Pacybara and barseqPro require a SLURM HPC cluster.
-2. Install [`clusterutil`](https://github.com/jweile/clusterutil) 
-3. Make sure R version 4.1 or higher and the following R packages are installed: [`yogitools`](https://github.com/jweile/yogitools), [`yogiseq`](https://github.com/jweile/yogiseq), [`hgvsParseR`](https://github.com/VariantEffect/hgvsParseR),`argparser`,`pbmcapply`,`hash`,`bitops`
-	* yogitools, yogiutil and hgvsParser can be installed via `remotes::install_github("jweile/yogitools")`, etc
-4. Make sure python3.8 or higher is installed.
-5. Make sure emboss, bwa, bowtie2, muscle and samtools are installed. (For example via conda).
-    * `conda install -c bioconda emboss bwa bowtie2 muscle samtools`
-6. Install [`pacbiotools`](https://github.com/jweile/pacbiotools)
-7. Install [`barseqPro`](https://github.com/jweile/barseqPro) (this includes `pacybara`)
+  1. Pacybara and barseqPro require a Slurm or PBS HPC cluster.
+  2. Install [`clusterutil`](https://github.com/jweile/clusterutil). This handles the abstraction between Slurm and PBS interfaces.
+  3. Download or clone the code repository:
+    * Either via git: `git clone https://github.com/jweile/barseqPro.git`
+    * Or as a simple download `wget https://github.com/jweile/barseqPro/archive/refs/heads/master.zip&&unzip master.zip`
+  4. Installation
+    * Automatic installation (via conda and R):
+        * Make sure anaconda (or miniconda) is installed.
+        * Run `./install.sh`. This will install all dependencies in a new conda environment called `pacybara`.
+    * Alternative manual installation:
+        * Make sure python version 3.8 or higher is installed.
+        * Make sure R version 4.1 or higher as well as the following R packages are installed: [`yogitools`](https://github.com/jweile/yogitools), [`yogiseq`](https://github.com/jweile/yogiseq), [`hgvsParseR`](https://github.com/VariantEffect/hgvsParseR),`argparser`,`pbmcapply`,`hash`,`bitops`.  yogitools, yogiutil and hgvsParser can be installed via `remotes::install_github("jweile/yogitools")`, etc
+        * Make sure emboss, bwa, bowtie2, muscle and samtools are installed. (e.g. via conda: `conda install -c bioconda emboss bwa bowtie2 muscle samtools`)
+        * Copy all scripts from the `src/` folder into a directory on your path, e.g. `cp src/* ~/bin/`
+
+If you need to perform CCS processing/filtering from Pacbio CLR reads to prepare your long read inputs, we also recommend installing [`pacbiotools`](https://github.com/jweile/pacbiotools).
 
 
 ## Running pacybara
 1. 	Prepare a reference fasta file for the amplicon (let's call it `amplicon.fasta` here) and note the start and end positions of the ORF within. Also create a directory that will contain the output, for example `outputDir/`. Also take note of the barcode degeneracy code(s) in the reference file. By default, pacybara assumes barcodes of length 25 with a strong-weak nucleotide pattern (`SWSWSWSWSWSWSWSWSWSWSWSWS`). If your barcoding strategy differs from this, you will need to indicate this when you run pacybara.
-2. 	Let's assume your reference fasta file is called `amplicon.fasta` and your ORF within starts at position 207 and ends at 4604. Let's also assume you're using the default barcode pattern as above. The Execute pacybara on the sample: `pacybara.sh --orfStart 207 --orfEnd 4604  reads_demuxed.bc1001-bc1001_RQ998.fastq.gz amplicon.fasta outputDir/`. However, it is recommended that you run pacybara as a SLURM job. Using clusterutil, you can do so like this: `submitjob.sh -n myPacybaraJob -c 12 -m 24G -t 36:00:00 -l pacybara.log -e pacybara.log -- pacybara.sh --orfStart 207 --orfEnd 4604  reads_demuxed.bc1001-bc1001_RQ998.fastq.gz amplicon.fasta outputDir/`. As you can see we requested 12CPU cores, 24GB of RAM and 36hours runtime for the job. You can modify this as needed. 
+2. If you installed the dependencies above via anaconda / miniconda, make sure to activate the corresponding environment. (The one created by the install.sh script is called 'pacybara'): `conda activate pacyabara`.
+3. 	Let's assume your reference fasta file is called `amplicon.fasta` and your ORF within starts at position 207 and ends at 4604. Let's also assume you're using the default barcode pattern as above. Execute pacybara on the sample: 
+
+```pacybara.sh --orfStart 207 --orfEnd 4604  reads_demuxed.bc1001-bc1001_RQ998.fastq.gz amplicon.fasta outputDir/```. 
+
+However, it is recommended that you run pacybara as a HPC job. Using clusterutil, you can do so like this: 
+```submitjob.sh -n myPacybaraJob -c 12 -m 24G -t 36:00:00 -l pacybara.log -e pacybara.log --conda pacybara -- pacybara.sh --orfStart 207 --orfEnd 4604  reads_demuxed.bc1001-bc1001_RQ998.fastq.gz amplicon.fasta outputDir/```
+
+As you can see we requested 12CPU cores, 24GB of RAM and 36hours runtime for the job and pass on the `pacybara` conda environment. You can modify this as needed. 
+
+If you don't have an HPC environment you can instead try out our experimental single-machine version. However, without the ability to run parallel jobs, this will take a very long time to run (i.e. days or even weeks!).
+
+```pacybara_nomux.sh --orfStart 207 --orfEnd 4604  reads_demuxed.bc1001-bc1001_RQ998.fastq.gz amplicon.fasta outputDir/```. 
 
 Here's the full usage information on the pacybara executable: 
 ```
@@ -106,7 +131,7 @@ You should now have the following 9 columns, in the following order:
 1. Prepare a parameter sheet for your run. An example can be found below.
 2. Prepare a folder containing the FASTQ files for your samples. Make sure the names of the FASTQ files match the sample names in the parameter sheet.
 3. The results will be written to the current working directory, so I recommend creating a new directory for this purpose first; e.g. `mkdir barseq_MFG_2022-08-15 && cd $_`.
-4. BarseqPro just takes two arguments, the path to the FASTQ folder and the parameter sheet, e.g. `barseq.sh fastqFolder/ parameters.txt`. Again, it is recommended to submit this as a slurm job: `submitjob.sh -n myBarseqJob -c 12 -m 24G -t 36:00:00 -l barseq.log -e barseq.log -- barseq.sh fastqFolder/ parameters.txt`. 
+4. BarseqPro just takes two arguments, the path to the FASTQ folder and the parameter sheet, e.g. `barseq.sh fastqFolder/ parameters.txt`. Again, it is recommended to submit this as a HPC job: `submitjob.sh -n myBarseqJob -c 12 -m 24G -t 36:00:00 -l barseq.log -e barseq.log -- barseq.sh fastqFolder/ parameters.txt`. 
 
 Runtime is very dependent on the maxError parameter in the parameter sheet. Allowing for only 1 error is much faster than 2 or 3!
 
