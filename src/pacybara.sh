@@ -309,6 +309,26 @@ else
 fi
 
 
+#helper function to extract relevant sections from a parameter file
+extractParamSection() {
+  INFILE="$1"
+  SECTION="$2"
+  mkdir -p tmp
+  case "$SECTION" in
+    ARGUMENTS) TMPFILE=$(mktemp -p tmp/);;
+    *SEQUENCE*) TMPFILE=$(mktemp -p tmp/ --suffix=.fasta);;
+    SAMPLE) TMPFILE=$(mktemp -p tmp/ --suffix=.tsv);;
+    *) echo "Unrecognized section selected!"&&exit 2;;
+  esac
+  RANGE=($(grep -n "$SECTION" "$INFILE"|cut -f1 -d:))
+  sed -n "$((${RANGE[0]}+1)),$((${RANGE[1]}-1))p;$((${RANGE[1]}))q" "$INFILE">"$TMPFILE"
+  echo "$TMPFILE"
+}
+
+#Load parameters
+# source $(extractParamSection $PARAMETERS ARGUMENTS)
+# INFASTA=$(extractParamSection $PARAMETERS 'AMPLICON SEQUENCE')
+
 
 function removeBarcode {
   INFASTA=$1

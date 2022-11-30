@@ -158,7 +158,8 @@ extractMatchRanges <- function(samStream) {
 
 
 processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
-      bcPoss=c(153,2812),orfStart=207,orfEnd=2789,barseqMode=0) {
+      bcPoss=c(153,2812),orfStart=207,orfEnd=2789,barseqMode=0,
+      maxQDrops=5,minBCQ=85) {
 
   #adjust ORF positions relative to barcode cutouts
   if (any(bcPoss < orfStart)) {
@@ -275,12 +276,37 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
         next
       }
 
+      #check for poor quality barcodes and filter
+      bcQuals <- lapply(bcGenos,function(x) {
+        if (is.null(x) || !("barcodes" %in% names(x))) return(list(0,0)) 
+        else lapply(x$barcodes[,"qual"],function(s) charToRaw(s)|>as.integer()-33)
+      })
+      medQ <- median(unlist(bcQuals))
+      isLowQual <- sapply(bcQuals, function(qs) {
+        metrics <- sapply(qs, function(q) {
+          c(drops=sum(q < medQ), meanQ=mean(q))
+        })
+        any(metrics["drops",] > maxQDrops | metrics["meanQ",] < minBCQ)
+      })
+      if (any(isLowQual)) {
+        exceptions$add("lowQualBarcode",sum(missingBC))
+        rIDs <- rIDs[which(!isLowQual)]
+        bcGenos <- bcGenos[which(!isLowQual)]
+      }
+
+      #if no barcodes survived, skip to next chunk
+      if (all(isLowQual)) {
+        linesDone <- linesDone + nlines
+        cat("\r",linesDone,"lines processed")
+        next
+      }
+
       #write barcodes to output streams
       if (barseqMode > 0) {
 
         bcs <- cbind(read=rIDs,fetchBC(bcGenos,barseqMode))
         cat(toFASTQ(bcs),"\n",file=bcOut,sep="")
-        bcOut
+        # bcOut
 
       } else {
 
@@ -361,6 +387,8 @@ p <- add_argument(p, "--bcPos", help="comma-separated list of barcode positions"
 p <- add_argument(p, "--orfStart", help="ORF start position",default=207L)
 p <- add_argument(p, "--orfEnd", help="ORF end position",default=2789L)
 p <- add_argument(p, "--barseqMode", help="Whether to run in barseq mode. Setting to it to 1 or 2 will only extract barcode one or two respectively, and not the ORF", default=0L)
+p <- add_argument(p, "--maxQDrops", help="Maximum number of barcode bases with Qscores below median.",default=5L)
+p <- add_argument(p, "--minBCQ", help="Minimum average barcode Qscore",default=85L)
 pargs <- parse_args(p)
 
 
@@ -381,7 +409,8 @@ stopifnot(exprs={
 processSAMs(pargs$sam,pargs$ref,pargs$outdir,
   chunkSize=pargs$chunkSize,bcLen=pargs$bcLen,bcPoss=bcPoss,
   orfStart=pargs$orfStart,orfEnd=pargs$orfEnd,
-  barseqMode=pargs$barseqMode
+  barseqMode=pargs$barseqMode,
+  maxQDrops=pargs$maxQDrops,minBCQ=pargs$minBCQ
 )
 
 cat("\nDone!\n")
