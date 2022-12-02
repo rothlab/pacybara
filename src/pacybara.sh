@@ -24,6 +24,8 @@ BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
 # BCPOS=153
 ORFSTART=207
 ORFEND=2789
+MAXQDROPS=5
+MINBCQ=85
 THREADS=4
 MINJACCARD=0.2
 MINMATCHES=1
@@ -56,6 +58,10 @@ Usage: pacybara.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>]
                  $BARCODE
 -s|--orfStart  : The ORF start position, defaults to $ORFSTART
 -e|--orfEnd    : The ORF end position, defaults to $ORFEND
+-d|--maxQDrops : The maximum number of low-quality bases allowed in a given barcode.
+                 Defaults to $MAXQDROPS
+-q|--minBCQ    : The minimum average quality score in a given barcode.
+                 Defaults to $MINBCQ
 --minQual      : The minimum PHRED quality for variant basecall to be
                  considered real. Defaults to $MINQUAL
 -m|--minMatches: The minimum number of variant matches for a merge
@@ -132,6 +138,32 @@ while (( "$#" )); do
            usage 1
         fi
         ORFEND=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -d|--maxQDrops)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: cpus must be a positive integer number" >&2
+           usage 1
+        fi
+        MAXQDROPS=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -q|--minBCQ)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: cpus must be a positive integer number" >&2
+           usage 1
+        fi
+        MINBCQ=$2
         shift 2
       else
         echo "ERROR: Argument for $1 is missing" >&2
@@ -412,7 +444,8 @@ startJobs() {
       -e ${CHUNKDIR}/${TAG}.log -t 24:00:00 \
       -c 4 -m 4G $BLARG $CONDAARG \
       pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
-      --orfStart $ORFSTART --orfEnd $ORFEND -c 4 \
+      --orfStart $ORFSTART --orfEnd $ORFEND \
+      --maxQDrops $MAXQDROPS --minBCQ $MINBCQ -c 4 \
       "$CHUNK" "$REFFASTANOBC" "$CHUNKDIR")
     #convert newlines in retval to spaces
     RETVAL=${RETVAL//$'\n'/ }

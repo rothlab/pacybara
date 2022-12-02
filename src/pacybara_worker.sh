@@ -24,6 +24,8 @@ BCPOS="153,2812"
 ORFSTART=207
 ORFEND=2789
 THREADS=24
+MAXQDROPS=5
+MINBCQ=85
 
 
 #helper function to print usage information
@@ -44,6 +46,10 @@ Usage: pacybara_worker.sh [-b|--barcode <BARCODE>] [-p|--barcodePos <BCPOS>]
 -p|--barcodePos: Comma-separated list of barcode position, defaults to $BCPOS
 -s|--orfStart  : The ORF start position, defaults to $ORFSTART
 -e|--orfEnd    : The ORF end position, defaults to $ORFEND
+-d|--maxQDrops : The maximum number of low-quality bases allowed in a given barcode.
+                 Defaults to $MAXQDROPS
+-q|--minBCQ    : The minimum average quality score in a given barcode.
+                 Defaults to $MINBCQ
 -c|--cpus      : Number of CPU cores, defaults to $THREADS
 <FASTQ>        : The input fastq.gz file
 <FASTA>        : The reference fasta file (with removed barcodes)
@@ -79,6 +85,32 @@ while (( "$#" )); do
            usage 1
         fi
         THREADS=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -d|--maxQDrops)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: cpus must be a positive integer number" >&2
+           usage 1
+        fi
+        MAXQDROPS=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -q|--minBCQ)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        if ! [[ $2 =~ $NUMRX ]] ; then
+           echo "ERROR: cpus must be a positive integer number" >&2
+           usage 1
+        fi
+        MINBCQ=$2
         shift 2
       else
         echo "ERROR: Argument for $1 is missing" >&2
@@ -236,6 +268,7 @@ fi
 # fi
 echo "Extracting barcodes..."
 pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR" \
-  --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND
+  --bcLen $BLEN --bcPos $BCPOS --orfStart $ORFSTART --orfEnd $ORFEND \
+  --maxQDrops $MAXQDROPS --minBCQ $MINBCQ
   
 echo "Done!"
