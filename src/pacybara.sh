@@ -19,67 +19,31 @@
 #fail on error, even within pipes; disallow use of unset variables, enable history tracking
 set -euo pipefail +H
 
-BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
-
-# BCPOS=153
-ORFSTART=207
-ORFEND=2789
-MAXQDROPS=5
-MINBCQ=85
 THREADS=4
-MINJACCARD=0.2
-MINMATCHES=1
-MAXDIFF=2
-MINQUAL=100
-VIRTUALBC=0
-USEDOWNTAG=0
 QARG=""
 BLACKLIST=""
 
+die() {
+  echo "FATAL: $1">&2
+  # echo "This would have been a program exit!">&2
+  exit ${2:-1}
+}
 
 #helper function to print usage information
 usage () {
   cat << EOF
 
-pacybara.sh v0.0.1 
+pacybara.sh v0.1.0 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
 Runs Pacybara
-Usage: pacybara.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>] 
-   [-e|--orfEnd <ORFEND>] [--minQual <MINQUAL>] 
-   [-m|--minMatches <MINMATCHES>] [--maxDiff <MAXDIFF>] 
-   [-j|--minJaccard <MINJACCARD>] [-v|--virtualBC]
-   [-c|--cpus <NUMBER>] [-q|--queue <QUEUE>] 
-   [--blacklist {<NODE>,}]
-   <INFASTQ> <FASTA> [<WORKSPACE>]
+Usage: pacybara.sh [-c|--cpus <CPUS>] [-q|--queue <QUEUE>] [-b|--blacklist {<NODE>,}] <PARAMETERS>
 
--b|--barcode   : The barcode degeneracy code sequence, defaults to
-                 $BARCODE
--s|--orfStart  : The ORF start position, defaults to $ORFSTART
--e|--orfEnd    : The ORF end position, defaults to $ORFEND
--d|--maxQDrops : The maximum number of low-quality bases allowed in a given barcode.
-                 Defaults to $MAXQDROPS
--q|--minBCQ    : The minimum average quality score in a given barcode.
-                 Defaults to $MINBCQ
---minQual      : The minimum PHRED quality for variant basecall to be
-                 considered real. Defaults to $MINQUAL
--m|--minMatches: The minimum number of variant matches for a merge
-                 to occur. Defaults to $MINMATCHES
---maxDiff      : The maxium allowed edit distance between two clusters
-                 for a merge to occur. Defaults to $MAXDIFF
--j|--minJaccard: The minimum Jaccard coefficient between to clusters
-                 for a merge to occur. Defaults to $MINJACCARD
--v|--virtualBC : Use virtual barcodes (fusion of up- and down-tags) 
-                 for clustering. Otherwise only use uptags.
--d|--downTag   : Cluster based on second barcode (i.e. "down-tag") 
-                 instead of first or virtual barcode
 -c|--cpus      : Number of CPUs to use, defaults to $THREADS
--q|--queue     : The queue (slurm partition) to use
---blacklist    : A comma-separated list of compute nodes not to be used
-<INFASTQ>      : The input fastq.gz file to process
-<FASTA>        : The raw reference fasta file 
-<WORKSPACE>    : The workspace directory. Defaults to 'workspace/'
+-q|--queue     : The HPC queue (or slurm partition) to use
+-b|--blacklist : A comma-separated list of HPC nodes to avoid
+<PARAMETERS>   : The parameter sheet file
 
 EOF
  exit $1
@@ -96,15 +60,6 @@ while (( "$#" )); do
       usage 0
       shift
       ;;
-    -b|--barcode)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        BARCODE=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
     -c|--cpus)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
         if ! [[ $2 =~ $NUMRX ]] ; then
@@ -117,118 +72,6 @@ while (( "$#" )); do
         echo "ERROR: Argument for $1 is missing" >&2
         usage 1
       fi
-      ;;
-    -s|--orfStart)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $NUMRX ]] ; then
-           echo "ERROR: orfStart must be a positive integer number" >&2
-           usage 1
-        fi
-        ORFSTART=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -e|--orfEnd)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $NUMRX ]] ; then
-           echo "ERROR: orfEnd must be a positive integer number" >&2
-           usage 1
-        fi
-        ORFEND=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -d|--maxQDrops)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $NUMRX ]] ; then
-           echo "ERROR: cpus must be a positive integer number" >&2
-           usage 1
-        fi
-        MAXQDROPS=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -q|--minBCQ)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $NUMRX ]] ; then
-           echo "ERROR: cpus must be a positive integer number" >&2
-           usage 1
-        fi
-        MINBCQ=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    --minQual)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $NUMRX ]] ; then
-           echo "ERROR: minQual must be a positive integer number" >&2
-           usage 1
-        fi
-        MINQUAL=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -m|--minMatches)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $NUMRX ]] ; then
-           echo "ERROR: minMatches must be a positive integer number" >&2
-           usage 1
-        fi
-        MINMATCHES=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    --maxDiff)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $NUMRX ]] ; then
-           echo "ERROR: maxDiff must be a positive integer number" >&2
-           usage 1
-        fi
-        MAXDIFF=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -j|--minJaccard)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        if ! [[ $2 =~ $FLOATRX ]] ; then
-           echo "ERROR: minJaccard must be between 0 and 1" >&2
-           usage 1
-        fi
-        MINJACCARD=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -v|--virtualBC)
-      VIRTUALBC=1
-      shift
-      ;;
-    -d|--downTag)
-      USEDOWNTAG=1
-      shift
       ;;
     -q|--queue)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
@@ -279,59 +122,20 @@ for BIN in muscle bwa bowtie2 samtools seqret Rscript python3; do
   if [[ -z $(command -v $BIN) ]] ; then
     echo "The required software $BIN could not be found!">&2
     if [[ -z $CONDAARG ]]; then
-      echo "Maybe a conda environment needs to be activated?"
+      echo "Maybe a conda environment needs to be activated?">&2
     fi
-    exit 1
+    die
   fi
 done
 
-#validate flags
-if [[ "$VIRTUALBC" == 1 && "$USEDOWNTAG" == 1 ]]; then
-  echo "ERROR: --virtualBC and --downTag cannot be used together!">&2
-  exit 1
-fi
-
 #validate positional arguments
-INFASTQ=$1
-if ! [[ -r "$INFASTQ" ]]; then
-  echo "ERROR: Unable to read FASTQ file $INFASTQ">&2
-  exit 1
+PARAMETERS=$1
+if [[ -z $PARAMETERS ]]; then
+  echo "ERROR: You must provide a parameter sheet!"
+  usage 1
 fi
-RX='\.fastq\.gz$'
-if ! [[ "$INFASTQ" =~ $RX ]]; then
-   echo 'ERROR: First parameter must be a *.fastq.gz file' >&2
-   exit 1
-fi
-# INDIR=$1
-# if ! [[ -d "$INDIR" ]]; then
-#   echo "ERROR: $INDIR is not a directory!">&2
-#   exit 1
-# fi
-# #add trailing "/" to directory name, if missing
-# RX='/$'
-# if ! [[ "$INDIR" =~ $RX ]]; then
-#   INDIR="${INDIR}/"
-# fi
-
-REFFASTA=$2
-if ! [[ -r "$REFFASTA" ]]; then
-  echo "ERROR: Unable to read FASTA file $REFFASTA">&2
-  exit 1
-fi
-RX='\.fasta|\.fa$'
-if ! [[ "$REFFASTA" =~ $RX ]]; then
-   echo 'ERROR: First parameter must be a *.fasta file' >&2
-   exit 1
-fi
-
-WORKSPACE=${3:-workspace/}
-if ! [[ -d "$WORKSPACE" ]]; then
-  echo "ERROR: $WORKSPACE is not a directory!">&2
-  exit 1
-fi
-RX='/$'
-if ! [[ "$WORKSPACE" =~ $RX ]]; then
-  WORKSPACE="${WORKSPACE}/"
+if ! [[ -r "$PARAMETERS" ]]; then
+  die "Unable to read parameter sheet file $PARAMETERS"
 fi
 
 if [[ -z $BLACKLIST ]]; then
@@ -350,16 +154,66 @@ extractParamSection() {
     ARGUMENTS) TMPFILE=$(mktemp -p tmp/);;
     *SEQUENCE*) TMPFILE=$(mktemp -p tmp/ --suffix=.fasta);;
     SAMPLE) TMPFILE=$(mktemp -p tmp/ --suffix=.tsv);;
-    *) echo "Unrecognized section selected!"&&exit 2;;
+    *) die "Unrecognized section selected!";;
   esac
   RANGE=($(grep -n "$SECTION" "$INFILE"|cut -f1 -d:))
   sed -n "$((${RANGE[0]}+1)),$((${RANGE[1]}-1))p;$((${RANGE[1]}))q" "$INFILE">"$TMPFILE"
   echo "$TMPFILE"
 }
 
-#Load parameters
-# source $(extractParamSection $PARAMETERS ARGUMENTS)
-# INFASTA=$(extractParamSection $PARAMETERS 'AMPLICON SEQUENCE')
+validateString() {
+  if [[ -z "$1" ]]; then
+    die "Definition for $2 missing in parameter sheet!"
+  fi 
+}
+validateFile() {
+  validateString "$1" "$2"
+  if ! [[ -r "$1" ]]; then
+    die "Unable to read $2 : $1"
+  fi 
+}
+validateInteger() {
+  validateString "$1" "$2"
+  if ! [[ $1 =~ $NUMRX ]] ; then
+    die "$2 must be an integer number!"
+  fi
+}
+validateFloat() {
+  validateString "$1" "$2"
+  if ! [[ $1 =~ $FLOATRX ]] ; then
+    die "$2 must be a number!"
+  fi
+}
+
+#Load and validate parameter sheet
+source $(extractParamSection $PARAMETERS ARGUMENTS)
+validateFile $INFASTQ "INFASTQ"
+RX='\.fastq\.gz$'
+if ! [[ "$INFASTQ" =~ $RX ]]; then
+   die 'First parameter must be a *.fastq.gz file'
+fi
+validateString $WORKSPACE "WORKSPACE"
+RX='/$'
+if ! [[ "$WORKSPACE" =~ $RX ]]; then
+  WORKSPACE="${WORKSPACE}/"
+fi
+validateString $BARCODE "BARCODE"
+validateInteger $ORFSTART "ORFSTART"
+validateInteger $ORFEND "ORFEND"
+validateInteger $MAXQDROPS "MAXQDROPS"
+validateInteger $MINBCQ "MINBCQ"
+validateFloat $MINJACCARD "MINJACCARD"
+validateInteger $MINMATCHES "MINMATCHES"
+validateInteger $MAXDIFF "MAXDIFF"
+validateInteger $MINQUAL "MINQUAL"
+validateString $CLUSTERMODE "CLUSTERMODE"
+case $CLUSTERMODE in
+  uptag);;
+  downtag);;
+  virtual);;
+  *) die "Cluster mode must be 'uptag','downtag' or 'virtual'";;
+esac
+REFFASTA=$(extractParamSection $PARAMETERS 'AMPLICON SEQUENCE')
 
 
 function removeBarcode {
@@ -373,7 +227,7 @@ function removeBarcode {
   #remove BARCODES
   FBODY2=$(echo $FBODY|sed -r "s/${BARCODE}//g")
   #write to output file
-  OUTFASTA=$(echo $INFASTA|sed -r "s/.fa$/_noBC.fa/")
+  OUTFASTA=${INFASTA/%.fa*/_noBC.fa}
   echo $FHEADER>$OUTFASTA
   printf "$FBODY2\n"|fold -w 80 >>$OUTFASTA
   #return the name of the new FASTAFILE
@@ -400,16 +254,14 @@ function findBarcodPos {
   elif [[ $NUMBC == 1 ]]; then
     echo "$((${#PREFIX1}+1))"
   else
-    echo "Error: Reference must contain either one or two barcodes!">&2
-    exit 1
+    die "Reference must contain either one or two barcodes!"
   fi
 }
 
 #find barcode position in reference
 BCPOS=$(findBarcodPos $REFFASTA $BARCODE)
-if [[ ! "$BCPOS" =~ "," ]] && [[ "$USEDOWNTAG" == 1 ]]; then
-  echo "Error: No downtag found, but --downTag option was requested.">&2
-  exit 1
+if [[ ! "$BCPOS" =~ "," ]] && [[ "$CLUSTERMODE" == "downtag" ]]; then
+  die "No downtag found, but downtag cluster mode was requested."
 fi
 #remove barcode from reference
 REFFASTANOBC=$(removeBarcode $REFFASTA $BARCODE)
@@ -417,10 +269,11 @@ REFFASTANOBC=$(removeBarcode $REFFASTA $BARCODE)
 samtools faidx "$REFFASTANOBC"
 bwa index -a is "$REFFASTANOBC"
 
+#create workspace directory if it doesn't exist yet
+mkdir -p "$WORKSPACE"
 
-#define intermediate files
-OUTPREFIX=$(basename $INFASTQ|sed -r "s/.fastq.gz$//")
-#extracted barcodes file
+#create directory for file chunks
+OUTPREFIX=$(basename ${INFASTQ%.fastq.gz})
 CHUNKDIR="${WORKSPACE}/${OUTPREFIX}_chunks/"
 mkdir -p $CHUNKDIR
 # mkdir -p ${CHUNKDIR}/logs/
@@ -431,6 +284,7 @@ zcat "$INFASTQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
   "${CHUNKDIR}/$OUTPREFIX"
 
 CHUNKS=$(ls ${WORKSPACE}/${OUTPREFIX}_chunks/${OUTPREFIX}*.fastq)
+echo "Successfully created $(echo "$CHUNKS"|wc -l) job packages!"
 
 #PROCESS CHUNKS IN PARALLEL
 startJobs() {
@@ -498,8 +352,7 @@ while ! [[ -z $FAILEDCHUNKS ]]; do
     FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
     ((TRIES++))
   else
-    echo "ERROR: Exhausted 3 attempts at re-running failed jobs!">&2
-    exit 1
+    die "Exhausted 3 attempts at re-running failed jobs!"
   fi
 done
 
@@ -564,11 +417,11 @@ CLUSTERDIR="${WORKSPACE}/${OUTPREFIX}_clustering/"
 mkdir -p $CLUSTERDIR/qc
 
 #pre-clustering (group fully identical barcode reads)
-if [[ $VIRTUALBC == 1 ]]; then
+if [[ $CLUSTERMODE == "virtual" ]]; then
   echo "Indexing virtual barcodes..."
   zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|pacybara_precluster.py\
     |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
-elif [[ $USEDOWNTAG == 1 ]]; then
+elif [[ $CLUSTERMODE == "downtag" ]]; then
   echo "Indexing downtag barcodes..."
   zcat "${EXTRACTDIR}/bcExtract_2.fastq.gz"|pacybara_precluster.py\
     |gzip -c>"${CLUSTERDIR}/bcPreclust.fastq.gz"
@@ -607,15 +460,12 @@ pacybara_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
 zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
   |uniq -c>"${CLUSTERDIR}/qc/edDistr.txt"
 
-if [[ "$USEDOWNTAG" == 1 ]]; then
+if [[ "$CLUSTERMODE" == "DOWNTAG" ]]; then
   TAGFILE="${EXTRACTDIR}/bcExtract_2.fastq.gz"
 else
   TAGFILE="${EXTRACTDIR}/bcExtract_1.fastq.gz"
 fi
 # #perform actual clustering and form consensus
-# submitjob.sh -n "${OUTPREFIX}_clustering" -c 12 -m 24G -t 14-00:00:00\
-#   -l "${CLUSTERDIR}/qc/clustering.log" -e "${CLUSTERDIR}/qc/clustering_err.log"\
-#   -q guru -- \
 pacybara_cluster.py \
   --uptagBarcodeFile "$TAGFILE" \
   --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \
