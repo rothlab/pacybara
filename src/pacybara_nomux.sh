@@ -22,10 +22,7 @@ set -euo pipefail +H
 VERSION=0.1.0
 
 THREADS=4
-QARG=""
-BLACKLIST=""
 
-#Print error message and exit.
 die() {
   if [[ -n $1 ]]; then
     echo "FATAL: $1">&2
@@ -38,16 +35,16 @@ die() {
 usage () {
   cat << EOF
 
-pacybara.sh v$VERSION 
+pacybara_nomux.sh v$VERSION 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
-Runs Pacybara
-Usage: pacybara.sh [-c|--cpus <CPUS>] [-q|--queue <QUEUE>] [-b|--blacklist {<NODE>,}] <PARAMETERS>
+Runs a non-multiplexed version of Pacybara. This is slower, but doesn't
+require a HPC cluster.
+
+Usage: pacybara.sh [-c|--cpus <CPUS>] <PARAMETERS>
 
 -c|--cpus      : Number of CPUs to use, defaults to $THREADS
--q|--queue     : The HPC queue (or slurm partition) to use
--b|--blacklist : A comma-separated list of HPC nodes to avoid
 <PARAMETERS>   : The parameter sheet file
 
 EOF
@@ -72,24 +69,6 @@ while (( "$#" )); do
            usage 1
         fi
         THREADS=$2
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -q|--queue)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        QARG="-q $2"
-        shift 2
-      else
-        echo "ERROR: Argument for $1 is missing" >&2
-        usage 1
-      fi
-      ;;
-    -b|--blacklist)
-      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        BLACKLIST=$2
         shift 2
       else
         echo "ERROR: Argument for $1 is missing" >&2
@@ -125,11 +104,11 @@ fi
 # CHECK FOR SOFTWARE DEPENDENCIES
 for BIN in muscle bwa bowtie2 samtools seqret Rscript python3; do
   if [[ -z $(command -v $BIN) ]] ; then
-    MSG="The required software $BIN could not be found!"
+    echo "The required software $BIN could not be found!">&2
     if [[ -z $CONDAARG ]]; then
-      MSG="$MSG Maybe a conda environment needs to be activated?"
+      echo "Maybe a conda environment needs to be activated?"
     fi
-    die "$MSG"
+    die
   fi
 done
 
@@ -142,13 +121,6 @@ fi
 if ! [[ -r "$PARAMETERS" ]]; then
   die "Unable to read parameter sheet file $PARAMETERS"
 fi
-
-if [[ -z $BLACKLIST ]]; then
-  BLARG=""
-else
-  BLARG="--blacklist $BLACKLIST"
-fi
-
 
 #helper function to extract relevant sections from a parameter file
 extractParamSection() {
@@ -232,6 +204,7 @@ function removeBarcode {
   #remove BARCODES
   FBODY2=$(echo $FBODY|sed -r "s/${BARCODE}//g")
   #write to output file
+  # OUTFASTA=$(echo $INFASTA|sed -r "s/.fa$/_noBC.fa/")
   OUTFASTA=${INFASTA/%.fa*/_noBC.fa}
   echo $FHEADER>$OUTFASTA
   printf "$FBODY2\n"|fold -w 80 >>$OUTFASTA
@@ -277,126 +250,31 @@ bwa index -a is "$REFFASTANOBC"
 #create workspace directory if it doesn't exist yet
 mkdir -p "$WORKSPACE"
 
-#create directory for file chunks
+#define intermediate files
 OUTPREFIX=$(basename ${INFASTQ%.fastq.gz})
-CHUNKDIR="${WORKSPACE}/${OUTPREFIX}_chunks/"
-mkdir -p $CHUNKDIR
-# mkdir -p ${CHUNKDIR}/logs/
 
-#SPLIT FASTQ INTO CHUNKS
-echo "Splitting FASTQ file into job packages"
-zcat "$INFASTQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
-  "${CHUNKDIR}/$OUTPREFIX"
+#UNZIP INPUT FASTQ FILE
+INFQEXTRACT="${WORKSPACE}/${OUTPREFIX}.fastq"
+gzip -cd $INFASTQ>$INFQEXTRACT
 
-CHUNKS=$(ls ${WORKSPACE}/${OUTPREFIX}_chunks/${OUTPREFIX}*.fastq)
-echo "Successfully created $(echo "$CHUNKS"|wc -l) job packages!"
+#RUN WORKER ON EXTRACTED FILE
+pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
+  --orfStart $ORFSTART --orfEnd $ORFEND \
+  --maxQDrops $MAXQDROPS --minBCQ $MINBCQ -c $THREADS \
+  $INFQEXTRACT "$REFFASTANOBC" "$WORKSPACE" \
+  2>&1|tee >(gzip -c >"${WORKSPACE}/${OUTPREFIX}_align.log.gz")
 
-#PROCESS CHUNKS IN PARALLEL
-startJobs() {
-  CHUNKS=$1
-  JOBS=""
-  for CHUNK in $CHUNKS; do
-    TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
-    #start barseq.R job and capture the job-id number
-    echo "Submitting $TAG"
-    RETVAL=$(submitjob.sh -n $TAG -l ${CHUNKDIR}/${TAG}.log \
-      -e ${CHUNKDIR}/${TAG}.log -t 24:00:00 \
-      -c 4 -m 4G $BLARG $CONDAARG \
-      pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \
-      --orfStart $ORFSTART --orfEnd $ORFEND \
-      --maxQDrops $MAXQDROPS --minBCQ $MINBCQ -c 4 \
-      "$CHUNK" "$REFFASTANOBC" "$CHUNKDIR")
-    #convert newlines in retval to spaces
-    RETVAL=${RETVAL//$'\n'/ }
-    JOBID=${RETVAL##* }
-    if [ -z "$JOBS" ]; then
-      #if jobs is empty, set it to the new ID
-      JOBS=$JOBID
-    else
-      #otherwise append the id to the list
-      JOBS=${JOBS},$JOBID
-    fi
-  done
-
-  waitForJobs.sh -v "$JOBS"
-}
-
-checkForFailedJobs() {
-  CHUNKS=$1
-  FAILEDCHUNKS=""
-  for CHUNK in $CHUNKS; do
-    TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
-    LOG=${CHUNKDIR}/${TAG}.log
-    # STATUS=$(tail -1 $LOG)
-    # if [ "$STATUS" != "Done!" ]; then
-    #PBS (as opposed to slurm) appends two additional lines to the end of the log file
-    #so we need to check the last three lines for the success keyword.
-    if ! tail -3 "$LOG"|grep -q "Done!"; then
-      echo "Process $TAG failed!">&2
-      if [[ -z $FAILEDCHUNKS ]]; then
-        FAILEDCHUNKS="$CHUNK"
-      else
-        FAILEDCHUNKS="$FAILEDCHUNKS $CHUNK"
-      fi
-    fi
-  done
-  echo "$FAILEDCHUNKS"
-}
-
-echo "Running jobs..."
-startJobs "$CHUNKS"
-echo "Validating jobs..."
-FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
-#If any jobs failed, try 2 more times
-TRIES=1
-while ! [[ -z $FAILEDCHUNKS ]]; do
-  if [[ $TRIES < 3 ]]; then
-    echo "Attempting to re-run failed jobs."
-    startJobs "$FAILEDCHUNKS"
-    echo "Validating jobs..."
-    FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
-    ((TRIES++))
-  else
-    die "Exhausted 3 attempts at re-running failed jobs!"
-  fi
-done
+#we can now get rid of the extracted file
+rm $INFQEXTRACT
 
 #DIRECTORY FOR STORING EXTRACTION RESULTS
 EXTRACTDIR="${WORKSPACE}/${OUTPREFIX}_extract/"
-mkdir -p $EXTRACTDIR
+mkdir -p ${EXTRACTDIR}/qc
 
-#CONSOLIDATE RESULT CHUNKS
-echo "Consolidating alignments and genotypes"
-for CHUNK in $CHUNKS; do
-  #this for loop is just to absolutely make sure the order is preserved
-  TAG=$(basename $CHUNK|sed -r "s/\\.fastq//g")
-  cat ${CHUNKDIR}${TAG}_extract/bcExtract_1.fastq.gz>>${EXTRACTDIR}/bcExtract_1.fastq.gz
-  if [[ -e ${CHUNKDIR}${TAG}_extract/bcExtract_2.fastq.gz ]]; then
-    cat ${CHUNKDIR}${TAG}_extract/bcExtract_2.fastq.gz>>${EXTRACTDIR}/bcExtract_2.fastq.gz
-  fi
-  cat ${CHUNKDIR}${TAG}_extract/bcExtract_combo.fastq.gz>>${EXTRACTDIR}/bcExtract_combo.fastq.gz
-  cat ${CHUNKDIR}${TAG}_extract/genoExtract.csv.gz>>${EXTRACTDIR}/genoExtract.csv.gz
-done
-
-samtools cat -o "${WORKSPACE}/${OUTPREFIX}_align.bam" ${CHUNKDIR}/*bam
-tar czf "${WORKSPACE}/${OUTPREFIX}_alignLog.tgz" ${CHUNKDIR}/*log
-
-#consolidate exception counts
-Rscript -e '
-options(stringsAsFactors=FALSE)
-lines<-readLines(pipe(paste("cat",paste(commandArgs(TRUE),collapse=" "))))
-mat <- do.call(rbind,lapply(strsplit(lines,","),function(elems) {
-  s<-do.call(rbind,strsplit(elems,"="))
-  setNames(as.integer(trimws(s[,2])),s[,1])
-}))
-tot <- colSums(mat)
-cat(paste(sprintf("%s=%d",names(tot),tot),collapse="\n"))
-cat("\n")
-# print(colSums(mat))
-' ${CHUNKDIR}*/*exceptions.txt>${EXTRACTDIR}/exceptions.txt
+#make the exception file name compatible with single-machine execution
+mv ${EXTRACTDIR}/bcExtract_exceptions.txt ${EXTRACTDIR}/exceptions.txt
 
 #Run quick QC of barcode length distributions
-mkdir ${EXTRACTDIR}/qc
 #uptag
 zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
   sort -n|uniq -c>"${EXTRACTDIR}/qc/bc1len_distr.txt"
@@ -409,15 +287,12 @@ fi
 zcat "${EXTRACTDIR}/bcExtract_combo.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
   sort -n|uniq -c>"${EXTRACTDIR}/qc/bccombolen_distr.txt"
 
-#CLEAN UP CHUNKS
-rm -r $CHUNKDIR
 
 ############
 #Clustering
 ############
 
-
-#DIRECTORY FOR STORING EXTRACTION RESULTS
+#DIRECTORY FOR STORING CLUSTERING RESULTS
 CLUSTERDIR="${WORKSPACE}/${OUTPREFIX}_clustering/"
 mkdir -p $CLUSTERDIR/qc
 

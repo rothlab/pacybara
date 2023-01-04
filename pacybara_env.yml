@@ -15,8 +15,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
 
-PREFIX := ${HOME}/bin/
-
-install: 
-	cp src/*sh src/*R src/*.py ${PREFIX}
-
+name: pacybara
+channels:
+  - defaults
+  - anaconda
+  - bioconda
+  - conda-forge
+dependencies:
+  - python=3.8
+  - r-base=4.2.2
+  - muscle
+  - emboss
+  - bwa
+  - botwie2
+  - samtools

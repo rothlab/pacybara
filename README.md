@@ -1,62 +1,66 @@
+# Pacybara and BarseqPro
+
+Pacybara is a long-read barcode clustering method designed for multiplexed assays of variant effect (MAVEs).
+
+BarseqPro is an accompanying BarSeq MAVE analysis pipeline.
+
 ## Pre-requisites and installation:
-1. Pacybara and barseqPro require a SLURM HPC cluster.
-2. Install [`clusterutil`](https://github.com/jweile/clusterutil) 
-3. Make sure R version 4 or higher and the following R packages are installed: `yogitools`, `yogiseq`, `hgvsParseR`,`argparser`,`pbmcapply`,`hash`,`bitops`
-	* yogitools, yogiutil and hgvsParser can be installed via `remotes::install_github("jweile/yogitools")`, etc
-4. Make sure python3.8 or higher is installed.
-5. Make sure emboss, bwa, bowtie2, muscle and samtools are installed. (For example via conda).
-6. Install [`pacbiotools`](https://github.com/jweile/pacbiotools)
-7. Install [`barseqPro`](https://github.com/jweile/barseqPro) (this includes `pacybara`)
+1. Pacybara and barseqPro are designed for a Slurm or PBS HPC cluster.
+    * A single-node version of pacybara is also provided, but not recommended due to very long runtimes.
+2. Install [`clusterutil`](https://github.com/jweile/clusterutil). This handles the abstraction between Slurm and PBS interfaces.
+3. Download or clone the code repository:
+    * Either via git: `git clone https://github.com/jweile/barseqPro.git`
+    * Or as a simple download `wget https://github.com/jweile/barseqPro/archive/refs/heads/master.zip&&unzip master.zip`
+4. Installation
+    * Automatic installation (via conda and R):
+        * Make sure anaconda (or miniconda) is installed.
+        * Run `./install.sh`. This will install all dependencies in a new conda environment called `pacybara`.
+    * Alternative manual installation:
+        * Make sure python version 3.8 or higher is installed.
+        * Make sure R version 4.1 or higher as well as the following R packages are installed: [`yogitools`](https://github.com/jweile/yogitools), [`yogiseq`](https://github.com/jweile/yogiseq), [`hgvsParseR`](https://github.com/VariantEffect/hgvsParseR),`argparser`,`pbmcapply`,`hash`,`bitops`.  yogitools, yogiutil and hgvsParser can be installed via `remotes::install_github("jweile/yogitools")`, etc
+        * Make sure emboss, bwa, bowtie2, muscle and samtools are installed. (e.g. via conda: `conda install -c bioconda emboss bwa bowtie2 muscle samtools`)
+        * Copy all scripts from the `src/` folder into a directory on your path, e.g. `cp src/* ~/bin/`
+
+If you need to perform CCS processing/filtering from Pacbio CLR reads to prepare your long read inputs, we also recommend installing [`pacbiotools`](https://github.com/jweile/pacbiotools).
 
 
 ## Running pacybara
-1. 	Prepare a reference fasta file for the amplicon (let's call it `amplicon.fasta` here) and note the start and end positions of the ORF within. Also create a directory that will contain the output, for example `outputDir/`. Also take note of the barcode degeneracy code(s) in the reference file. By default, pacybara assumes barcodes of length 25 with a strong-weak nucleotide pattern (`SWSWSWSWSWSWSWSWSWSWSWSWS`). If your barcoding strategy differs from this, you will need to indicate this when you run pacybara.
-2. 	Let's assume your reference fasta file is called `amplicon.fasta` and your ORF within starts at position 207 and ends at 4604. Let's also assume you're using the default barcode pattern as above. The Execute pacybara on the sample: `pacybara.sh --orfStart 207 --orfEnd 4604  reads_demuxed.bc1001-bc1001_RQ998.fastq.gz amplicon.fasta outputDir/`. However, it is recommended that you run pacybara as a SLURM job. Using clusterutil, you can do so like this: `submitjob.sh -n myPacybaraJob -c 12 -m 24G -t 36:00:00 -l pacybara.log -e pacybara.log -- pacybara.sh --orfStart 207 --orfEnd 4604  reads_demuxed.bc1001-bc1001_RQ998.fastq.gz amplicon.fasta outputDir/`. As you can see we requested 12CPU cores, 24GB of RAM and 36hours runtime for the job. You can modify this as needed. 
+1. Prepare a parameter sheet file. An example can be found further down in this document.
+    * As part of the parameter sheet you will need to define the amplicon sequence and note the start and end positions of the ORF within. Also take note of the barcode degeneracy code(s) in the reference file. These will need to be recorded in the `ORFSTART`, `ORFEND` and `BARCODE` fields of the sheet.
+    * Carefully choose the parameters for `MINBCQ` and `MINQUAL`, as they are dependent on the overall distribution of Q-scores in your input FASTA, which can drastically differ depending on the number of passes in the Pacbio run (and are usually grossly over-inflated). If your input fastq file was processed via DeepConsensus you will need lower these values, as DeepConsenus produces much more reasonable Q-values than CCS. For example, for CCS at > 5 passes, `MINQUAL=100` is a good starting point, whereas for DeepConsensus, `MINQUAL=60` would be better.
+2. If you used the automatic installation script or manually installed the dependencies above via anaconda / miniconda, make sure to activate the corresponding environment. (The one created by the install.sh script is called 'pacybara'): `conda activate pacybara`.
+3. 	Let's assume your parameter sheet is called `pacybara_parameters.txt`. You can then execute pacybara via: 
 
-Here's the full usage information on the pacybara executable: 
-```
-pacybara.sh [-b|--barcode <BARCODE>] [-s|--orfStart <ORFSTART>] 
-   [-e|--orfEnd <ORFEND>] [--minQual <MINQUAL>] 
-   [-m|--minMatches <MINMATCHES>] [--maxDiff <MAXDIFF>] 
-   [-j|--minJaccard <MINJACCARD>] [-v|--virtualBC]
-   [-c|--cpus <NUMBER>] [-q|--queue <QUEUE>] 
-   [--blacklist {<NODE>,}]
-   <INFASTQ> <FASTA> [<WORKSPACE>]
+```pacybara.sh pacybara_parameters.txt```. 
 
--b|--barcode   : The barcode degeneracy code sequence, defaults to
-                 $BARCODE
--s|--orfStart  : The ORF start position, defaults to $ORFSTART
--e|--orfEnd    : The ORF end position, defaults to $ORFEND
---minQual      : The minimum PHRED quality for variant basecall to be
-                 considered real. Defaults to $MINQUAL
--m|--minMatches: The minimum number of variant matches for a merge
-                 to occur. Defaults to $MINMATCHES
---maxDiff      : The maxium allowed edit distance between two clusters
-                 for a merge to occur. Defaults to $MAXDIFF
--j|--minJaccard: The minimum Jaccard coefficient between to clusters
-                 for a merge to occur. Defaults to $MINJACCARD
--v|--virtualBC : Use virtual barcodes (fusion of up- and down-tags) 
-                 for clustering. Otherwise only use uptags.
--d|--downTag   : Cluster based on second barcode (i.e. "down-tag") 
-                 instead of first or virtual barcode
--c|--cpus      : Number of CPUs to use, defaults to $THREADS
--q|--queue     : The queue (slurm partition) to use
---blacklist    : A comma-separated list of compute nodes not to be used
-<INFASTQ>      : The input fastq.gz file to process
-<FASTA>        : The raw reference fasta file 
-<WORKSPACE>    : The workspace directory. Defaults to 'workspace/'
+However, it is recommended that you run pacybara as a HPC job. Assuming we'd like to request 12CPU cores, 24GB of RAM and 36 hours runtime for the job and pass on the `pacybara` conda environment:
+```submitjob.sh -n myPacybaraJob -c 12 -m 24G -t 36:00:00 -l pacybara.log -e pacybara.log --conda pacybara -- pacybara.sh pacybara_parameters.txt```
+
+There are a number of optional parameters to deal with cluster idiosyncrasies: 
 ```
+pacybara.sh [-c|--cpus <CPUS>] [-q|--queue <QUEUE>] [-b|--blacklist {<NODE>,}] <PARAMETERS>
+
+-c|--cpus      : Number of CPUs to use per node, defaults to 4
+-q|--queue     : The HPC queue (or slurm partition) to use
+-b|--blacklist : A comma-separated list of HPC nodes to avoid
+<PARAMETERS>   : The parameter sheet file
+```
+
+If you don't have an HPC environment you can instead try out our experimental single-machine version. However, without the ability to run parallel jobs, this will take a very long time to run (i.e. days or even weeks!).
+
+```pacybara_nomux.sh pacybara_parameters.txt```. 
 
 ## Pacybara Output
 The output directory will contain multiple items: 
-  * A bam file of all the reads aligned against the amplicon
-  * A tarball containing the log files of all the parallel alignments
-  * A directory ending in `_extract`. This contains fastq files of the extracted barcodes for each read and a file called `genotypes.csv.gz` which contains the extracted ORF genotypes for each read.
-  * A directory ending in `_clustering`. This contains a number of intermediate files, as well as the final `clusters_transl.csv.gz` and `clusters_transl_filtered.csv.gz`
-	  * `clusters_transl.csv.gz` contains an unfiltered table of all final clusters (i.e. clones) and barcodes and genotypes.
-	  * `clusters_transl_filtered.csv.gz` is the same, but filtered for clones supported by >1 CCS read and no barcode collisions.
+
+* A bam file of all the reads aligned against the amplicon
+* A tarball containing the log files of all the parallel alignments
+* A directory ending in `_extract`. This contains fastq files of the extracted barcodes for each read and a file called `genotypes.csv.gz` which contains the extracted ORF genotypes for each read.
+* A directory ending in `_clustering`. This contains a number of intermediate files, as well as the final `clusters_transl.csv.gz` and `clusters_transl_filtered.csv.gz`
+    * `clusters_transl.csv.gz` contains an unfiltered table of all final clusters (i.e. clones) and barcodes and genotypes.
+    * `clusters_transl_filtered.csv.gz` is the same, but filtered for clones supported by >1 CCS read and no barcode collisions.
     * `clusters_transl_softfilter.csv.gz` is filtered less strictly. It still requires >1 CCS read, but allows clones from barcode collisions as long as they dominate that barcode with at least a 2/3 majority.
-  * Within the `*_clustering` directory you will also find a `qc/` subdirectory. This contains a number of QC plots.
+    * Within the `*_clustering` directory you will also find a `qc/` sub-directory. This contains a number of QC plots.
 
 ## Converting the Pacybara output for use with barseqPro.
 The barseqPro software requires a library of barcode associations. This table can be made using any of the `clusters_transl*` tables, depending on the desired filtering level. I recommend using the `softfilter` version for best results. To convert it to the required format,
@@ -93,6 +97,7 @@ optional arguments:
 
 ### Manual conversion
 Alternatively, you can also do this manually. To do so, extract the `clusters_transl_softfilter.csv.gz` file using gunzip (or similar software) and open it in a spreadsheet software such as `Calc` or `Excel`. Then, assuming you want to use uptags:
+
 1. Delete the following columns: `virtualBarcode`, `reads`, `collisions`, `upTagCollisions`, and `geno`.
 2. Rename the `upBarcode` column to `barcode`.
 3. Move the `size` column to the end (so that is now column `I`)
@@ -105,7 +110,7 @@ You should now have the following 9 columns, in the following order:
 1. Prepare a parameter sheet for your run. An example can be found below.
 2. Prepare a folder containing the FASTQ files for your samples. Make sure the names of the FASTQ files match the sample names in the parameter sheet.
 3. The results will be written to the current working directory, so I recommend creating a new directory for this purpose first; e.g. `mkdir barseq_MFG_2022-08-15 && cd $_`.
-4. BarseqPro just takes two arguments, the path to the FASTQ folder and the parameter sheet, e.g. `barseq.sh fastqFolder/ parameters.txt`. Again, it is recommended to submit this as a slurm job: `submitjob.sh -n myBarseqJob -c 12 -m 24G -t 36:00:00 -l barseq.log -e barseq.log -- barseq.sh fastqFolder/ parameters.txt`. 
+4. BarseqPro just takes two arguments, the path to the FASTQ folder and the parameter sheet, e.g. `barseq.sh fastqFolder/ parameters.txt`. Again, it is recommended to submit this as a HPC job: `submitjob.sh -n myBarseqJob -c 12 -m 24G -t 36:00:00 -l barseq.log -e barseq.log -- barseq.sh fastqFolder/ parameters.txt`. 
 
 Runtime is very dependent on the maxError parameter in the parameter sheet. Allowing for only 1 error is much faster than 2 or 3!
 
@@ -113,17 +118,104 @@ Runtime is very dependent on the maxError parameter in the parameter sheet. Allo
 
 BarseqPro will create the following folders: `counts/`, `logs/`, and `scores/`
 If some of these are missing or empty, you can check the log files for errors. The most important results will be in the `scores/` folder:
-  * joint_scores_*.csv will contain the map scores for each amino acid change in a given assay in MaveDB format.
-  * all_aa_scores_*.csv is similar, but contains a more detailed breakdown of scores based on single mutants only, multi-mutant averaging, and inverse multiplicative model inference.
-  * allScores.csv contains fitness scores for each individual barcoded clone.
+
+  * `joint_scores_*.csv` will contain the map scores for each amino acid change in a given assay in MaveDB format.
+  * `all_aa_scores_*.csv` is similar, but contains a more detailed breakdown of scores based on single mutants only, multi-mutant averaging, and inverse multiplicative model inference.
+  * `allScores.csv` contains fitness scores for each individual barcoded clone.
 
 ### Running barseq QC
 You can run `barseq_qc.R` on the output of barseqPro. It takes the following arguments: The path to the `allLRs.csv` file, the path to the `allCounts.csv` file, and the desired output directory, e.g.: `barseq_qc.R scores/allLRs.csv counts/allCounts.csv qc/`
 
 It will generate a number of QC plots in the specified output folder.
 
-### Example parameter sheet
-A valid parameter sheet is a simple plain-text .TXT file with four sections:
+### Example parameter sheets
+
+#### Pacybara parameter sheet
+A valid Pacybara parameter sheet is a simple plain-text .TXT file with two sections: `ARGUMENTS` and `AMPLICON SEQUENCE`. Each of them are demarcated using `#BEGIN` and `#END` statements. 
+
+The `ARGUMENTS` section is a bash script that needs to define the following variables: `TITLE`, `INFASTQ`, `WORKSPACE`, `BARCODE`, `ORFSTART`, `ORFEND`, `MAXQDROPS`, `MINBCQ`, `MINJACCARD`, `MINMATCHES`, `MAXDIFF`, `MINQUAL` and `CLUSTERMODE`. See the example below for individual explanations. Importantly, the `ORFSTART` and `ORFEND` parameters should correspond to the start and end positions of the open reading frame in the provided amplicon sequence.
+
+The `AMPLICON SEQUENCE` section should follow FASTA format and contain the sequence of the amplicon including all barcode loci and the coding sequence.
+
+```
+#########################
+#Pacybara parameter file
+#########################
+
+#BEGIN ARGUMENTS
+#Experiment title
+TITLE="LDLR-R01-test"
+# Long read sequencing input file (fastq.gz)
+INFASTQ=$HOME/data/pacbio_2021-06-09/filterRQ/demux/m54204U_210514_191645.subreads_ccsMerged_RQ999.fastq.gz
+# Workspace directory
+WORKSPACE=$HOME/projects/barseqPro/workspace/pacybara/LDLR_R01_pDONR_test/
+# The barcode degeneracy sequence used in the amplicon below
+BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
+# The start position of the ORF in the amplicon below (1-based)
+ORFSTART=207
+# The end position of the ORF in the amplicon below (1-based)
+ORFEND=2789
+# The maximum number of low-quality bases allowed in a given barcode.
+MAXQDROPS=5
+# The minimum average quality score allowed in a given barcode.
+MINBCQ=85
+#The minimum Jaccard coefficient (relative overlap of variants) for a cluster merge
+MINJACCARD=0.2
+#The minimum number of variants two cluster need to have in common to merge
+MINMATCHES=1
+#The maximum number of errors allowed between two barcode reads
+MAXDIFF=2
+#The minimum Q-score for a variant basecall to be considered real based on a single read alone
+MINQUAL=100
+#Cluster based on which barcodes? uptag, downtag, or virtual
+CLUSTERMODE=uptag
+#END ARGUMENTS
+
+#BEGIN AMPLICON SEQUENCE
+>PacBio_pDONR_LDLR_Barcoded  (3013 bp)
+GTAAAACGACGGCCAGTCTTAAGCTCGGGCCCCAAATAATGATTTTATTTTGACTGATAGTGACCTGTTCGTTGCAACAA
+ATTGATGAGCAATGCTTTTTTATAATGCCAACTTTgtacaaaaaaGCAGGCTCCATACGAGCACATTACGGGSWSWSWSW
+SWSWSWSWSWSWSWSWSCTAACTCGCATACCTCTGATAACTGCACCATGGGGCCCTGGGGCTGGAAATTGCGCTGGACCG
+TCGCCTTGCTCCTCGCCGCGGCGGGGACTGCAGTGGGCGACAGATGTGAAAGAAACGAGTTCCAGTGCCAAGACGGGAAA
+TGCATCTCCTACAAGTGGGTCTGCGATGGCAGCGCTGAGTGCCAGGATGGCTCTGATGAGTCCCAGGAGACGTGCTTGTC
+TGTCACCTGCAAATCCGGGGACTTCAGCTGTGGGGGCCGTGTCAACCGCTGCATTCCTCAGTTCTGGAGGTGCGATGGCC
+AAGTGGACTGCGACAACGGCTCAGACGAGCAAGGCTGTCCCCCCAAGACGTGCTCCCAGGACGAGTTTCGCTGCCACGAT
+GGGAAGTGCATCTCTCGGCAGTTCGTCTGTGACTCAGACCGGGACTGCTTGGACGGCTCAGACGAGGCCTCCTGCCCGGT
+GCTCACCTGTGGTCCCGCCAGCTTCCAGTGCAACAGCTCCACCTGCATCCCCCAGCTGTGGGCCTGCGACAACGACCCCG
+ACTGCGAAGATGGCTCGGATGAGTGGCCGCAGCGCTGTAGGGGTCTTTACGTGTTCCAAGGGGACAGTAGCCCCTGCTCG
+GCCTTCGAGTTCCACTGCCTAAGTGGCGAGTGCATCCACTCCAGCTGGCGCTGTGATGGTGGCCCCGACTGCAAGGACAA
+ATCTGACGAGGAAAACTGCGCTGTGGCCACCTGTCGCCCTGACGAATTCCAGTGCTCTGATGGAAACTGCATCCATGGCA
+GCCGGCAGTGTGACCGGGAATATGACTGCAAGGACATGAGCGATGAAGTTGGCTGCGTTAATGTGACACTCTGCGAGGGA
+CCCAACAAGTTCAAGTGTCACAGCGGCGAATGCATCACCCTGGACAAAGTCTGCAACATGGCTAGAGACTGCCGGGACTG
+GTCAGATGAACCCATCAAAGAGTGCGGGACCAACGAATGCTTGGACAACAACGGCGGCTGTTCCCACGTCTGCAATGACC
+TTAAGATCGGCTACGAGTGCCTGTGCCCCGACGGCTTCCAGCTGGTGGCCCAGCGAAGATGCGAAGATATCGATGAGTGT
+CAGGATCCCGACACCTGCAGCCAGCTCTGCGTGAACCTGGAGGGTGGCTACAAGTGCCAGTGTGAGGAAGGCTTCCAGCT
+GGACCCCCACACGAAGGCCTGCAAGGCTGTGGGCTCCATCGCCTACCTCTTCTTCACCAACCGGCACGAGGTCAGGAAGA
+TGACGCTGGACCGGAGCGAGTACACCAGCCTCATCCCCAACCTGAGGAACGTGGTCGCTCTGGACACGGAGGTGGCCAGC
+AATAGAATCTACTGGTCTGACCTGTCCCAGAGAATGATCTGCAGCACCCAGCTTGACAGAGCCCACGGCGTCTCTTCCTA
+TGACACCGTCATCAGCAGGGACATCCAGGCCCCCGACGGGCTGGCTGTGGACTGGATCCACAGCAACATCTACTGGACCG
+ACTCTGTCCTGGGCACTGTCTCTGTTGCGGATACCAAGGGCGTGAAGAGGAAAACGTTATTCAGGGAGAACGGCTCCAAG
+CCAAGGGCCATCGTGGTGGATCCTGTTCATGGCTTCATGTACTGGACTGACTGGGGAACTCCCGCCAAGATCAAGAAAGG
+GGGCCTGAATGGTGTGGACATCTACTCGCTGGTGACTGAAAACATTCAGTGGCCCAATGGCATCACCCTAGATCTCCTCA
+GTGGCCGCCTCTACTGGGTTGACTCCAAACTTCACTCCATCTCAAGCATCGATGTCAATGGGGGCAACCGGAAGACCATC
+TTGGAGGATGAAAAGAGGCTGGCCCACCCCTTCTCCTTGGCCGTCTTTGAGGACAAAGTATTTTGGACAGATATCATCAA
+CGAAGCCATTTTCAGTGCCAACCGCCTCACAGGTTCCGATGTCAACTTGTTGGCTGAAAACCTACTGTCCCCAGAGGATA
+TGGTCCTCTTCCACAACCTCACCCAGCCAAGAGGAGTGAACTGGTGTGAGAGGACCACCCTGAGCAATGGCGGCTGCCAG
+TATCTGTGCCTCCCTGCCCCGCAGATCAACCCCCACTCGCCCAAGTTTACCTGCGCCTGCCCGGACGGCATGCTGCTGGC
+CAGGGACATGAGGAGCTGCCTCACAGAGGCTGAGGCTGCAGTGGCCACCCAGGAGACATCCACCGTCAGGCTAAAGGTCA
+GCTCCACAGCCGTAAGGACACAGCACACAACCACCCGGCCTGTTCCCGACACCTCCCGGCTGCCTGGGGCCACCCCTGGG
+CTCACCACGGTGGAGATAGTGACAATGTCTCACCAAGCTCTGGGCGACGTTGCTGGCAGAGGAAATGAGAAGAAGCCCAG
+TAGCGTGAGGGCTCTGTCCATTGTCCTCCCCATCGTGCTCCTCGTCTTCCTTTGCCTGGGGGTCTTCCTTCTATGGAAGA
+ACTGGCGGCTTAAGAACATCAACAGCATCAACTTTGACAACCCCGTCTATCAGAAGACCACAGAGGATGAGGTCCACATT
+TGCCACAACCAGGACGGCTACAGCTACCCCTCGAGACAGATGGTCAGTCTGGAGGATGACGTGGCGTGACTTCGATAGGT
+GCGTGTGAAGGSWSWSWSWSWSWSWSWSWSWSWSWSCCTCAGTCGCTCAGTCAAGCACCCAGCtttCTTGTACAAAGTTG
+GCATTATAAGAAAGCATTGCTTATCAATTTGTTGCAACGAACAGGTCACTATCAGTCAAAATAAAATCATTATTTGCCAT
+CCAGCTGATATCCCCTATAGTGAGTCGTATTACATGGTCATAGCTGTTTCCTG
+#END AMPLICON SEQUENCE
+```
+
+#### BarseqPro
+A valid barseqPro parameter sheet is a simple plain-text .TXT file with four sections:
 `ARGUMENTS`, `FLANKING SEQUENCES`, `CODING SEQUENCE`, and `SAMPLE TABLE`. Each of them are demarkated using `#BEGIN` and `#END` statements. 
 
 The `ARGUMENTS` section is a bash script that needs to define the following variables: `TITLE`, `LIBRARY`, `BCLEN`, `BCMAXERR`, `REVCOMP`, and `PAIREDEND`. See the example below for individual explanations. 

@@ -22,6 +22,7 @@ options(
 
 library(argparser)
 library(yogitools)
+library(pbmcapply)
 
 p <- arg_parser(
   "pacybara QC",
@@ -113,6 +114,7 @@ if (pargs$softFilter) {
 
 ##########################################
 # Draw coverage plot
+cat("Drawing coverage plot...\n")
 aaChanges <- strsplit(clusters$aaChanges[!grepl("-|fs|WT|silent|[A-Z*]{2,}",clusters$aaChanges)],"\\|")
 aaChangeTally <- table(do.call(c,aaChanges))
 aacs <- names(aaChangeTally)
@@ -135,6 +137,7 @@ invisible(dev.off())
 
 
 #draw Census plot
+cat("Drawing census plots...\n")
 mutsPerClone <- c(
   fs=sum(grepl("fs",clusters$aaChanges)),
   if.indel=sum(grepl("-",clusters$aaChanges))+sum(grepl("\\d+[A-Z*]{2,}",clusters$aaChanges)),
@@ -155,6 +158,7 @@ par(op)
 invisible(dev.off())
 
 #extraction QC
+cat("Performing extraction QC...\n")
 successCon <- pipe(sprintf("zcat %s/genoExtract.csv.gz|wc -l",pargs$extractDir))
 success <- readLines(successCon)
 close(successCon)
@@ -167,12 +171,14 @@ extractQC <- c(success=success,extractQC)
 pdf(sprintf("%s/extractionQC.pdf",pargs$outdir),5,7)
 # png(sprintf("%s/extractionQC.png",pargs$outdir),200*5,200*7,res=200)
 op <- par(mar=c(10,4,4,1),las=3)
-barplot(extractQC,border=NA,col=c(3,2,2,2),ylab="CCS reads",main="barcode and genotype extraction")
+qcColors <- c("chartreuse3",rep("firebrick3",length(exceptions)))
+barplot(extractQC,border=NA,col=qcColors,ylab="CCS reads",main="barcode and genotype extraction")
 par(op)
 dev.off()
 
 
 #### JACKPOT PLOT
+cat("Performing jackpot QC...\n")
 cvars <- gsub("c\\.|\\[|\\]$","",clusters$hgvsc)|>strsplit(";")
 cvarTally <- unlist(cvars)|>table()
 cvarTally <- cvarTally[-which(names(cvarTally)=="=")]|>sort(decreasing=TRUE)
@@ -195,6 +201,7 @@ dev.off()
 
 
 #### Nucleotide bias plot
+cat("Analyzing nucleotide change biases...\n")
 ccTable <- clusters$codonChanges[!grepl("WT|indel|silent",clusters$codonChanges)]|>
   strsplit("\\|")|>unlist()|>na.omit()|>
   yogitools::extract.groups("([ACGT]{3})(\\d+)([ACGT]+)")|>
@@ -246,5 +253,54 @@ for (i in 1:3) {
   drawMat(multiMat[,,i],paste("POP pos.",i))
 }
 dev.off()
+
+
+### Barcode bias plots
+parseFASTQ <- function(incon) {
+  seqs <- character(0)
+  while(length(lines <- readLines(incon,4000L)) > 0) {
+    seqs <- c(seqs,lines[seq(2,length(lines),4)])
+  }
+  return(seqs)
+}
+drawBigMat <- function(mat,main="",cmap=yogitools::colmap(c(0,0.5,1),c("white","steelblue3","steelblue4"))) {
+  plot(NA,type="n",xlim=c(0,ncol(mat)),ylim=c(0,nrow(mat)),
+    xlab="barcode nucleotide position",ylab="base",axes=FALSE,main=main
+  )
+  axis(1,at=(1:ncol(mat))-.5,1:ncol(mat))
+  axis(2,at=(5:1)-.5,c("A","C","G","T","-"))
+  xs <- rep(1:ncol(mat),each=5)
+  ys <- rep(5:1,ncol(mat))
+  rect(xs-1,ys-1,xs,ys,col=cmap(mat),border=NA)
+  text(xs-.5,ys-.5,sprintf("%.01f%%",mat*100),cex=0.7)
+}
+
+cat("Analyzing barcode base biases...\n")
+
+fqfiles <- list.files(pargs$extractDir,pattern="bcExtract_\\d+\\.fastq\\.gz",full.names=TRUE)
+
+for (fqfile in fqfiles) {
+  bcname <- gsub("bcExtract_|.fastq.gz$","",basename(fqfile))
+
+  cat("--> Processing barcode ",bcname,"\n")
+
+  incon <- gzfile(fqfile,open="r")
+  bcSeqs <- parseFASTQ(incon)
+  close(incon)
+  maxLen <- quantile(nchar(bcSeqs),.99)
+  freqs <- do.call(cbind,pbmclapply(1:maxLen,function(i) {
+    table(factor(sapply(bcSeqs,substr,i,i),levels=c("A","C","G","T","")))
+  },mc.cores=8))
+
+  pdf(sprintf("%s/barcodeBias_%s.pdf",pargs$outdir,bcname),14,4)
+  drawBigMat(freqs/length(bcSeqs),main=sprintf("Barcode %s nucleotide bias",bcname))
+  invisible(dev.off())
+
+  # plot(NA,type="n",xlim=c(0,ncol(freqs)),ylim=c(0,1))
+  # grid(NA,NULL)
+  # for (i in 1:nrow(freqs)) {
+  #   lines(1:ncol(freqs),freqs[i,]/length(bcSeqs),col=i)
+  # }
+}
 
 cat("Done!\n")
