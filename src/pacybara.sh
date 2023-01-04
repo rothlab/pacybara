@@ -19,12 +19,17 @@
 #fail on error, even within pipes; disallow use of unset variables, enable history tracking
 set -euo pipefail +H
 
+VERSION=0.1.0
+
 THREADS=4
 QARG=""
 BLACKLIST=""
 
+#Print error message and exit.
 die() {
-  echo "FATAL: $1">&2
+  if [[ -n $1 ]]; then
+    echo "FATAL: $1">&2
+  fi
   # echo "This would have been a program exit!">&2
   exit ${2:-1}
 }
@@ -33,7 +38,7 @@ die() {
 usage () {
   cat << EOF
 
-pacybara.sh v0.1.0 
+pacybara.sh v$VERSION 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
@@ -120,11 +125,11 @@ fi
 # CHECK FOR SOFTWARE DEPENDENCIES
 for BIN in muscle bwa bowtie2 samtools seqret Rscript python3; do
   if [[ -z $(command -v $BIN) ]] ; then
-    echo "The required software $BIN could not be found!">&2
+    MSG="The required software $BIN could not be found!"
     if [[ -z $CONDAARG ]]; then
-      echo "Maybe a conda environment needs to be activated?">&2
+      MSG="$MSG Maybe a conda environment needs to be activated?"
     fi
-    die
+    die "$MSG"
   fi
 done
 

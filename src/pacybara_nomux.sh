@@ -19,23 +19,14 @@
 #fail on error, even within pipes; disallow use of unset variables, enable history tracking
 set -euo pipefail +H
 
-# BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
+VERSION=0.1.0
 
-# BCPOS=153
-# ORFSTART=207
-# ORFEND=2789
-# MAXQDROPS=5
-# MINBCQ=85
-# MINJACCARD=0.2
-# MINMATCHES=1
-# MAXDIFF=2
-# MINQUAL=100
-# VIRTUALBC=0
-# USEDOWNTAG=0
 THREADS=4
 
 die() {
-  echo "FATAL: $1">&2
+  if [[ -n $1 ]]; then
+    echo "FATAL: $1">&2
+  fi
   # echo "This would have been a program exit!">&2
   exit ${2:-1}
 }
@@ -44,7 +35,7 @@ die() {
 usage () {
   cat << EOF
 
-pacybara_nomux.sh v0.1.0 
+pacybara_nomux.sh v$VERSION 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
