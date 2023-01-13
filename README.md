@@ -9,8 +9,8 @@ BarseqPro is an accompanying BarSeq MAVE analysis pipeline.
     * A single-node version of pacybara is also provided, but not recommended due to very long runtimes.
 2. Install [`clusterutil`](https://github.com/jweile/clusterutil). This handles the abstraction between Slurm and PBS interfaces.
 3. Download or clone the code repository:
-    * Either via git: `git clone https://github.com/jweile/barseqPro.git`
-    * Or as a simple download `wget https://github.com/jweile/barseqPro/archive/refs/heads/master.zip&&unzip master.zip`
+    * Either via git: `git clone https://github.com/rothlab/pacybara.git`
+    * Or as a simple download `wget https://github.com/rothlab/pacybara/archive/refs/heads/master.zip&&unzip master.zip`
 4. Installation
     * Automatic installation (via conda and R):
         * Make sure anaconda (or miniconda) is installed.
