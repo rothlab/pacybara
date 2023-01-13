@@ -321,7 +321,7 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
         genoStrs <- sapply(bcGenos,function(bg) {
           if (!is.null(bg$genotype) && nrow(bg$genotype) > 0) {
             qualNum <- sapply(bg$genotype$qual,function(q) 
-              as.integer(round(mean(as.integer(charToRaw(q)))))
+              as.integer(round(mean(as.integer(charToRaw(q))-33)))
             )
             muts <- sapply(1:nrow(bg$genotype), function(i) with(bg$genotype[i,],{
               #convert reference position to relative position (wrt ORF)
