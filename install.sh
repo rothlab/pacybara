@@ -105,7 +105,7 @@ if [[ -z $(command -v "conda") ]] ; then
 fi
 
 if [[ $CONDA == 1 ]]; then
-  conda env create -f myfile.yaml
+  conda env create -f pacybara_env.yaml
 fi
 
 if [[ $DEPENDENCIES == 1 ]]; then
