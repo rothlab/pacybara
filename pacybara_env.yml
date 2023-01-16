@@ -27,5 +27,5 @@ dependencies:
   - muscle
   - emboss
   - bwa
-  - botwie2
+  - bowtie2
   - samtools
