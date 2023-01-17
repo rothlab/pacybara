@@ -289,7 +289,7 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
         any(metrics["drops",] > maxQDrops | metrics["meanQ",] < minBCQ)
       })
       if (any(isLowQual)) {
-        exceptions$add("lowQualBarcode",sum(missingBC))
+        exceptions$add("lowQualBarcode",sum(isLowQual))
         rIDs <- rIDs[which(!isLowQual)]
         bcGenos <- bcGenos[which(!isLowQual)]
       }

@@ -471,6 +471,7 @@ else
   TAGFILE="${EXTRACTDIR}/bcExtract_1.fastq.gz"
 fi
 # #perform actual clustering and form consensus
+echo "Starting clustering method..."
 pacybara_cluster.py \
   --uptagBarcodeFile "$TAGFILE" \
   --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \

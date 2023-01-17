@@ -60,14 +60,15 @@ except getopt.GetoptError as err:
   usageAndDie(err)
 
 #define default options
-# edFile = "m54204U_210624_203217.subreads_ccsMerged_RQ998_clustering/editDistance.csv.gz"
-# genoFile = "m54204U_210624_203217.subreads_ccsMerged_RQ998_extract/genoExtract.csv.gz"
-# preClustFile = "m54204U_210624_203217.subreads_ccsMerged_RQ998_clustering/bcPreclust.fastq.gz"
+# edFile = "m64308e_221221_185214_LDLR_R03.subreads.deep_clustering/editDistance.csv.gz"
+# genoFile = "m64308e_221221_185214_LDLR_R03.subreads.deep_extract/genoExtract.csv.gz"
+# preClustFile = "m64308e_221221_185214_LDLR_R03.subreads.deep_clustering/bcPreclust.fastq.gz"
 uptagFile=None
-minJaccard=0.3
+minJaccard=0.2
 minMatches=1
 maxDiff=2
-minQual=100
+minQual=32
+# outfile="m64308e_221221_185214_LDLR_R03.subreads.deep_clustering/clusters.csv.gz"
 outfile="clusters.csv.gz"
 
 #process the parsed command options
@@ -427,13 +428,16 @@ def alignmentConsensus(bcs):
     fasta.flush()
     #prepare output file
     with tempfile.NamedTemporaryFile(mode="r",suffix=".aln") as alnfile:
-      #run muscle
-      retVal = os.system(f"muscle -in {fasta.name} -out {alnfile.name} >/dev/null 2>&1")
-      #read muscle fasta output
-      if retVal == 0:
-        alignment = [line.strip() for line in alnfile if not line.startswith(">")]
-      else:
-        raise Exception("Alignment failed!")
+      with tempfile.NamedTemporaryFile(mode="r",suffix=".log") as logfile:
+        #run muscle
+        retVal = os.system(f"muscle -align {fasta.name} -output {alnfile.name} >{logfile.name} 2>&1")
+        #read muscle fasta output
+        if retVal == 0:
+          alignment = [line.strip() for line in alnfile if not line.startswith(">")]
+        else:
+          log("Muscle aligment failed. Error message below:")
+          log("".join([line for line in logfile]))
+          raise Exception("Alignment failed!")
   #get top base at each position
   consensus = ["" for i in range(len(alignment[0]))]
   for i in range(len(alignment[0])):
