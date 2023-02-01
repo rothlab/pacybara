@@ -99,27 +99,54 @@ if [[ -z $(command -v "waitForJobs.sh") ]] ; then
   echo "You will not be able to use HPC multiplexing without!">&2
   sleep 1
 fi
-if [[ -z $(command -v "conda") ]] ; then
-  echo "Warning: conda is not installed! Proceeding without.">&2
-  sleep 1
+#check that we're in the conda base environment
+if ! [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
+  echo "ERROR: You must run this installer from your conda 'base' environment!">&2
+  exit 1
 fi
 
+#install conda environment
 if [[ $CONDA == 1 ]]; then
-  conda env create -f pacybara_env.yml
+  #Check for presence of conda
+  if [[ -z $(command -v "conda") ]] ; then
+    echo "ERROR: conda is not installed! Unable to proceed!">&2
+    echo "Please either install anaconda/miniconda or use the --skipCondaEnv argument.">&2
+    exit 1
+  fi
+  if conda env list|grep -q pacybara; then
+    echo "Warning: Conda environment 'pacybara' already exists. Skipping conda setup.">&2
+    sleep 1
+  else
+    conda env create -f pacybara_env.yml
+  fi
 fi
 
 if [[ $DEPENDENCIES == 1 ]]; then
-  if conda env list|grep -q pacybara; then
-    conda activate pacybara
-  else 
-    echo "Warning: Pacybara conda environment not found. Proceeding without.">&2
+  #check if R is installed
+  if [[ -z $(command -v Rscript) ]] ; then
+    #if it's not found, try to activiate the new conda environment
+    if conda env list|grep -q pacybara; then
+      source "$CONDA_PREFIX/etc/profile.d/conda.sh"
+      conda activate pacybara
+    else 
+      echo "ERROR: Neither an R installation, nor the 'pacybara' conda environment were found!">&2
+      exit 1
+    fi
   fi
+  #install required R packages
   Rscript -e '
-    install.packages(c("remotes","argparser","hash","bitops","pbmcapply"),repos="https://cloud.r-project.org/")
+    cran.needed <- c("remotes","argparser","hash","bitops","pbmcapply")
+    cran.missing <- setdiff(cran.needed,rownames(installed.packages()))
+    if (length(cran.missing) > 0) {
+      install.packages(cran.missing,repos="https://cloud.r-project.org/")
+    }
     library(remotes)
-    install_github("jweile/yogitools")
-    install_github("jweile/yogiseq")
-    install_github("VariantEffect/hgvsParseR")
+    github.needed <- data.frame(user=c("jweile","jweile","VariantEffect"),package=c("yogitools","yogiseq","hgvsParseR"))
+    github.missing <- which(!(github.needed$package %in% rownames(installed.packages())))
+    if (length(github.missing) > 0) {
+      toInstall <- apply(github.needed[github.missing,],1,paste,collapse="/")
+      invisible(lapply(toInstall,install_github))
+    }
   '
 fi
 
