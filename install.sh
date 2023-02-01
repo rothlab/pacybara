@@ -122,16 +122,22 @@ if [[ $CONDA == 1 ]]; then
 fi
 
 if [[ $DEPENDENCIES == 1 ]]; then
-  #check if R is installed
-  if [[ -z $(command -v Rscript) ]] ; then
-    #if it's not found, try to activiate the new conda environment
+  #if the pacybara conda environment was used, then we need to install the packages 
+  # into that environment's R installation
+  if [[ $CONDA == 1 ]]; then
+    #so we need to activate the environment first
     if conda env list|grep -q pacybara; then
       source "$CONDA_PREFIX/etc/profile.d/conda.sh"
       conda activate pacybara
     else 
-      echo "ERROR: Neither an R installation, nor the 'pacybara' conda environment were found!">&2
+      echo "ERROR: The pacybara conda environment could not be found!">&2
       exit 1
     fi
+  #otherwise we install it into the default R installation.
+  elif [[ -z $(command -v Rscript) ]] ; then
+    echo "ERROR: Conda setup was skipped, but no separate R installation was found!">&2
+    echo "If you really want to skip the conda setup, please install all dependencies manually first.">&2
+    exit 1
   fi
   #install required R packages
   Rscript -e '
@@ -146,6 +152,12 @@ if [[ $DEPENDENCIES == 1 ]]; then
     if (length(github.missing) > 0) {
       toInstall <- apply(github.needed[github.missing,],1,paste,collapse="/")
       invisible(lapply(toInstall,install_github))
+    }
+    total <- length(cran.missing)+length(github.missing)
+    if (total == 0) {
+      cat("All required R packages are already present!\n")
+    } else {
+      cat("Installed ",total," R packages!\n")
     }
   '
 fi
