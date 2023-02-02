@@ -66,9 +66,9 @@ while (( "$#" )); do
       DEPENDENCIES=0
       shift
       ;;
-    -p|--PREFIX)
+    -p|--prefix)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
-        PREFIX=1
+        PREFIX=$2
         shift 2
       else
         echo "ERROR: Argument for $1 is missing" >&2
