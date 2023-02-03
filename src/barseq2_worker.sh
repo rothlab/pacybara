@@ -1,21 +1,20 @@
 #!/bin/bash
-
-# Copyright (C) 2022  Jochen Weile, Roth Lab
+# Copyright (C) 2021, 2022  Jochen Weile, The Roth Lab
 #
-# This file is part of BarseqPro.
+# This file is part of Pacybara.
 #
-# BarseqPro is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
+# Pacybara is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# BarseqPro is distributed in the hope that it will be useful,
+# Pacybara is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
 #
-# You should have received a copy of the GNU Affero General Public License
-# along with BarseqPro.  If not, see <https://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU General Public License
+# along with Pacybara.  If not, see <https://www.gnu.org/licenses/>.
 
 MAXERR=2
 #helper function to print usage information
@@ -164,3 +163,7 @@ pacybara_extractBCORF.R <(samtools view "$ALNFILE") "$REFFASTANOBC" "$EXTRACTDIR
   --bcLen $BLEN --bcPos $BCPOS --barseqMode 1
 
 #STEP3: Align barcodes to library
+bowtie2 --no-head --norc --very-sensitive --all \
+  -x "${LIBRARY%.csv}" \
+  -U "${EXTRACTDIR}/bcExtract_1.fastq.gz" 2>/dev/null\
+  |gzip -c> "${CLUSTERDIR}/bcMatches.sam.gz"
