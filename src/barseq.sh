@@ -27,11 +27,12 @@ barseq.sh v0.0.1
 by Jochen Weile <jochenweile@gmail.com> 2021
 
 Processes BarSeq data ona SLURM HPC cluster.
-Usage: barseq.sh [-b|--blacklist <BLACKLIST>] <INDIR> <PARAMS>
+Usage: barseq.sh [-b|--blacklist <BLACKLIST>] [-d|--debug] <INDIR> <PARAMS>
 
 <INDIR>        : The input directory containing the fastq.gz files
 <PARAMS>       : A barseq parameter sheet file
 -b|--blacklist : An optional comma-separated blacklist of nodes to avoid
+-d|--debug     : Enable debug mode (retains intermediate files)
 
 EOF
  exit $1
@@ -40,6 +41,7 @@ EOF
 #Parse Arguments
 PARAMS=""
 BLACKLIST=""
+DEBUG=0
 while (( "$#" )); do
   case "$1" in
     -h|--help)
@@ -54,6 +56,10 @@ while (( "$#" )); do
         echo "ERROR: Argument for $1 is missing" >&2
         usage 1
       fi
+      ;;
+    -d|--debug)
+      DEBUG=1
+      shift
       ;;
     --) # end of options indicates that the main command follows
       shift
@@ -209,11 +215,17 @@ processChunks() {
       R2FLAG=""
     fi
 
+    if [[ $DEBUG == 1 ]]; then
+      DEBUGARG="--debug"
+    else
+      DEBUGARG=""
+    fi
+
     #start barseq.R job and capture the job-id number
     RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log \
       -e ${WORKSPACE}logs/${TAG}.log -t 24:00:00 $BLARG \
       -m 12G -c 4 \
-      barseq_caller.R $RCARG --flanking $FLANKING --bcLen $BCLEN \
+      barseq_caller.R $RCARG $DEBUGARG --flanking $FLANKING --bcLen $BCLEN \
       --maxErr $BCMAXERR --r1 $CHUNK $R2FLAG $LIBRARY)
     JOBID=${RETVAL##* }
     if [ -z "$JOBS" ]; then
@@ -319,6 +331,12 @@ for R1FQ in $R1FQS; do
   echo "Consolidating results..."
   RESULTS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*_hits.csv.gz)
   zcat $RESULTS|cut -f 1 -d,|sort|uniq -c>$OUTFILE
+  if [[ $DEBUG == 1 ]]; then
+    DEBUGOUT=${WORKSPACE}counts/$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_counts_debug.csv.gz/")
+    DEBUGFILES=$(ls ${WORKSPACE}chunks/${R1PREFIX}*_debug.csv.gz)
+    cat $DEBUGFILES>$DEBUGOUT
+    rm $DEBUGFILES
+  fi
 
   #clean up 
   rm $CHUNKS $RESULTS
