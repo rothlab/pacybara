@@ -397,7 +397,7 @@ cat("\n")
 ' ${CHUNKDIR}*/*exceptions.txt>${EXTRACTDIR}/exceptions.txt
 
 #Run quick QC of barcode length distributions
-mkdir ${EXTRACTDIR}/qc
+mkdir -p ${EXTRACTDIR}/qc
 #uptag
 zcat "${EXTRACTDIR}/bcExtract_1.fastq.gz"|grep len=|cut -f 3,3 -d'='|\
   sort -n|uniq -c>"${EXTRACTDIR}/qc/bc1len_distr.txt"
@@ -443,7 +443,7 @@ zcat "${CLUSTERDIR}/bcPreclust.fastq.gz"|grep size|cut -f2,2 -d=|\
 #build bowtie index
 seqret -sequence <(zcat "${CLUSTERDIR}/bcPreclust.fastq.gz")\
   -outseq "${CLUSTERDIR}/bcPreclust.fasta"
-mkdir "${CLUSTERDIR}/db"
+mkdir -p "${CLUSTERDIR}/db"
 bowtie2-build "${CLUSTERDIR}/bcPreclust.fasta" \
   "${CLUSTERDIR}/db/bcDB"
 rm "${CLUSTERDIR}/bcPreclust.fasta"
