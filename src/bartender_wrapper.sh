@@ -16,8 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with Pacybara.  If not, see <https://www.gnu.org/licenses/>.
 
-#This script depends on submitjob.sh and waitForJobs.sh !
-
 #helper function to print usage information
 DIRECTION=f
 MAXERR=2
@@ -141,11 +139,17 @@ PREFIX=${WORKSPACE}/$(basename ${FQGZ%.fastq.gz})
 #so we'll have to extract the gz file first for bartender to be able to use it
 FQ=$(mktemp --suffix=.fq)
 gzip -dc $FQGZ>$FQ
+#extract barcodes
 bartender_extractor_com -f $FQ -o "$PREFIX" \
     -q $QUALITY -p "${PATTERN}" -m $MAXERR -d $DIRECTION
 rm $FQ
 
+#run clustering
 bartender_single_com -f ${PREFIX}_barcode.txt -o ${PREFIX} \
     -d $MAXERR -t $THREADS
+
+#compress intermediate results
+gzip ${PREFIX}_barcode.txt
+gzip ${PREFIX}_barcode.csv
 
 echo "Done!"

@@ -147,7 +147,7 @@ cp "$SAMPLES" "$WORKSPACE/samples.txt"
 
 #create folders for logs and temporary chunk files
 mkdir -p ${WORKSPACE}logs
-# mkdir -p ${WORKSPACE}chunks
+mkdir -p ${WORKSPACE}extract
 mkdir -p ${WORKSPACE}counts
 mkdir -p ${WORKSPACE}scores
 
@@ -241,7 +241,7 @@ checkForFailedJobs() {
 R1FQS="$(validateFASTQs)"
 processChunks "$R1FQS"
 echo "Validating jobs..."
-FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
+FAILEDCHUNKS=$(checkForFailedJobs "$R1FQS")
 
 #If any jobs failed, try 2 more times
 TRIES=1
@@ -250,7 +250,7 @@ while ! [[ -z $FAILEDCHUNKS ]]; do
     echo "Attempting to re-run failed jobs."
     processChunks "$FAILEDCHUNKS"
     echo "Validating jobs..."
-    FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
+    FAILEDCHUNKS=$(checkForFailedJobs "$R1FQS")
     ((TRIES++))
   else
     echo "ERROR: Exhausted 3 attempts at re-running failed jobs!">&2
@@ -258,3 +258,54 @@ while ! [[ -z $FAILEDCHUNKS ]]; do
   fi
 done
 
+for R1FQ in $R1FQS; do
+  PREFIX=${WORKSPACE}/$(basename ${R1FQ%.fastq.gz})
+  echo "Processing ${PREFIX} ..."
+  gzip "${PREFIX}_barcode.txt"
+  gzip "${PREFIX}_barcode.csv"
+  mv "${PREFIX}_barcode.*.gz" ${WORKSPACE}/extract/
+  mv "${PREFIX}_cluster.csv" ${WORKSPACE}/counts/
+  mv "${PREFIX}_quality.csv" ${WORKSPACE}/counts/
+done
+
+echo "Consolidating counts from all samples..."
+bartender_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
+
+
+#assemble parameter list for bartender_combiner
+# COMBOLIST=""
+# for R1FQ in $R1FQS; do
+#   PREFIX=${WORKSPACE}/$(basename ${R1FQ%.fastq.gz})
+#   if [[ -z "$COMBOLIST" ]]; then
+#     COMBOLIST="${PREFIX}_cluster.csv,${PREFIX}_quality.csv"
+#   else
+#     COMBOLIST="${COMBOLIST},${PREFIX}_cluster.csv,${PREFIX}_quality.csv"
+#   fi
+# done
+# #run bartender combiner to consolidate results
+# bartender_combiner_com -f "$COMBOLIST" -c 1 -o "${WORKSPACE}/counts/rawCounts"
+
+
+
+if [[ -n $BNFILTER ]]; then
+  BNARG="--bnFilter $BNFILTER"
+else
+  BNARG=""
+fi
+if [[ -n $FREQFILTER ]]; then
+  FFARG="--freqFilter $FREQFILTER"
+else 
+  FFARG=""
+fi
+
+echo "Calculating enrichment ratios and scores..."
+barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}scores/" $FFARG $BNARG
+
+echo "Running QC"
+#FIXME: Need to process different QC
+# barseq_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}qc/" $FFARG $BNARG
+
+#cleanup temp files
+rm tmp/*&&rmdir tmp
+
+echo "Done!"
