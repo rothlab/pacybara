@@ -149,7 +149,9 @@ bartender_single_com -f ${PREFIX}_barcode.txt -o ${PREFIX} \
     -d $MAXERR -t $THREADS
 
 #compress intermediate results
-gzip ${PREFIX}_barcode.txt
-gzip ${PREFIX}_barcode.csv
+gzip "${PREFIX}_barcode."*
+# gzip ${PREFIX}_barcode.csv
+mv "${PREFIX}_barcode."* "${WORKSPACE}/extract/"
+mv "${PREFIX}_cluster.csv" "${PREFIX}_quality.csv" "${WORKSPACE}/counts/"
 
 echo "Done!"

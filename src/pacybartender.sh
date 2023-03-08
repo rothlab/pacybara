@@ -258,18 +258,17 @@ while ! [[ -z $FAILEDCHUNKS ]]; do
   fi
 done
 
-for R1FQ in $R1FQS; do
-  PREFIX=${WORKSPACE}/$(basename ${R1FQ%.fastq.gz})
-  echo "Processing ${PREFIX} ..."
-  gzip "${PREFIX}_barcode.txt"
-  gzip "${PREFIX}_barcode.csv"
-  mv "${PREFIX}_barcode.*.gz" ${WORKSPACE}/extract/
-  mv "${PREFIX}_cluster.csv" ${WORKSPACE}/counts/
-  mv "${PREFIX}_quality.csv" ${WORKSPACE}/counts/
-done
+echo "Cleaning up intermediate files..."
+# mv "${WORKSPACE}/*_barcode.*.gz" ${WORKSPACE}/extract/
+# mv "${WORKSPACE}/*_cluster.csv" ${WORKSPACE}/counts/
+tar czf ${WORKSPACE}/counts/qualityMatrices.tgz ${WORKSPACE}/counts/*_quality.csv&&rm ${WORKSPACE}/counts/*_quality.csv
 
 echo "Consolidating counts from all samples..."
 bartender_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
+
+#compress intermediate files
+echo "Compressing files..."
+gzip ${WORKSPACE}/counts/*_cluster.csv
 
 
 #assemble parameter list for bartender_combiner
@@ -284,8 +283,6 @@ bartender_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
 # done
 # #run bartender combiner to consolidate results
 # bartender_combiner_com -f "$COMBOLIST" -c 1 -o "${WORKSPACE}/counts/rawCounts"
-
-
 
 if [[ -n $BNFILTER ]]; then
   BNARG="--bnFilter $BNFILTER"
@@ -303,7 +300,7 @@ barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}s
 
 echo "Running QC"
 #FIXME: Need to process different QC
-# barseq_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}qc/" $FFARG $BNARG
+bartender_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}qc/" --logfolder "${WORKSPACE}logs/" $FFARG $BNARG
 
 #cleanup temp files
 rm tmp/*&&rmdir tmp
