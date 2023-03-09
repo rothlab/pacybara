@@ -145,7 +145,7 @@ mkdir "$WORKSPACE"
 cp "$PARAMETERS" "$WORKSPACE"
 cp "$SAMPLES" "$WORKSPACE/samples.txt"
 
-#create folders for logs and temporary chunk files
+#create folders for logs and results
 mkdir -p ${WORKSPACE}logs
 mkdir -p ${WORKSPACE}extract
 mkdir -p ${WORKSPACE}counts
@@ -164,14 +164,6 @@ function validateFASTQs() {
     else 
       echo "ERROR: Unable to find or read FASTQ file for sample $SAMPLENAME">&2
       exit 2
-    fi
-    #in case of paired-end mode, also check for R2 file
-    if [[ $PAIREDEND == 1 ]]; then
-      R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
-      if  [[ ! -r "$R2FQ" ]]; then
-        echo "ERROR: Unable to find or read R2 FASTQ file $R2FQ !">&2
-        exit 1
-      fi
     fi
   done
   echo "$R1FQS"
@@ -222,8 +214,9 @@ checkForFailedJobs() {
 
   FAILEDCHUNKS=""
   for CHUNK in $CHUNKS; do
-    TAG=$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
-    LOG=${WORKSPACE}logs/barseq${TAG}.log
+    # TAG=$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
+    TAG="bt$(basename ${CHUNK%.fastq*})"
+    LOG=${WORKSPACE}logs/${TAG}.log
     STATUS=$(tail -1 $LOG)
     if [ "$STATUS" != "Done!" ]; then
       echo "Process $TAG failed!">&2
