@@ -27,7 +27,7 @@ If you need to perform CCS processing/filtering from Pacbio CLR reads to prepare
 ## Running pacybara
 1. Prepare a parameter sheet file. An example can be found further down in this document.
     * As part of the parameter sheet you will need to define the amplicon sequence and note the start and end positions of the ORF within. Also take note of the barcode degeneracy code(s) in the reference file. These will need to be recorded in the `ORFSTART`, `ORFEND` and `BARCODE` fields of the sheet.
-    * Carefully choose the parameters for `MINBCQ` and `MINQUAL`, as they are dependent on the overall distribution of Q-scores in your input FASTA, which can drastically differ depending on the number of passes in the Pacbio run (and are usually grossly over-inflated). If your input fastq file was processed via DeepConsensus you will need lower these values, as DeepConsenus produces much more reasonable Q-values than CCS. For example, for CCS at > 5 passes, `MINQUAL=100` is a good starting point, whereas for DeepConsensus, `MINQUAL=60` would be better.
+    * Carefully choose the parameters for `MINBCQ` and `MINQUAL`, as they are dependent on the overall distribution of Q-scores in your input FASTA, which can drastically differ depending on the number of passes in the Pacbio run (and are usually grossly over-inflated). If your input fastq file was processed via DeepConsensus you will need lower these values, as DeepConsenus produces much more reasonable Q-values than CCS. For example, for CCS at > 5 passes, `MINQUAL=67` is a good starting point, whereas for DeepConsensus, `MINQUAL=27` would be better.
 2. If you used the automatic installation script or manually installed the dependencies above via anaconda / miniconda, make sure to activate the corresponding environment. (The one created by the install.sh script is called 'pacybara'): `conda activate pacybara`.
 3. 	Let's assume your parameter sheet is called `pacybara_parameters.txt`. You can then execute pacybara via: 
 
@@ -146,9 +146,9 @@ The `AMPLICON SEQUENCE` section should follow FASTA format and contain the seque
 #Experiment title
 TITLE="LDLR-R01-test"
 # Long read sequencing input file (fastq.gz)
-INFASTQ=$HOME/data/pacbio_2021-06-09/filterRQ/demux/m54204U_210514_191645.subreads_ccsMerged_RQ999.fastq.gz
+INFASTQ=$HOME/data/pacbio/m54204U_210514_191645_ccs.fastq.gz
 # Workspace directory
-WORKSPACE=$HOME/projects/barseqPro/workspace/pacybara/LDLR_R01_pDONR_test/
+WORKSPACE=$HOME/projects/pacybara_workspace/LDLR_R01_test/
 # The barcode degeneracy sequence used in the amplicon below
 BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
 # The start position of the ORF in the amplicon below (1-based)
@@ -158,7 +158,7 @@ ORFEND=2789
 # The maximum number of low-quality bases allowed in a given barcode.
 MAXQDROPS=5
 # The minimum average quality score allowed in a given barcode.
-MINBCQ=85
+MINBCQ=52
 #The minimum Jaccard coefficient (relative overlap of variants) for a cluster merge
 MINJACCARD=0.2
 #The minimum number of variants two cluster need to have in common to merge
@@ -166,7 +166,7 @@ MINMATCHES=1
 #The maximum number of errors allowed between two barcode reads
 MAXDIFF=2
 #The minimum Q-score for a variant basecall to be considered real based on a single read alone
-MINQUAL=100
+MINQUAL=67
 #Cluster based on which barcodes? uptag, downtag, or virtual
 CLUSTERMODE=uptag
 #END ARGUMENTS
