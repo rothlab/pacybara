@@ -22,17 +22,17 @@
 usage () {
   cat << EOF
 
-barseq.sh v0.0.1 
+pacybartender.sh v0.0.1 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
-Processes BarSeq data ona SLURM HPC cluster.
-Usage: barseq.sh [-b|--blacklist <BLACKLIST>] [-d|--debug] <INDIR> <PARAMS>
+A convenient wrapper for Bartender that performs lookups against Pacybara
+libraries and performs downstream analysis
+Usage: pacybartender.sh [-b|--blacklist <BLACKLIST>] <INDIR> <PARAMS>
 
 <INDIR>        : The input directory containing the fastq.gz files
 <PARAMS>       : A barseq parameter sheet file
 -b|--blacklist : An optional comma-separated blacklist of nodes to avoid
--d|--debug     : Enable debug mode (retains intermediate files)
 
 EOF
  exit $1
@@ -41,7 +41,6 @@ EOF
 #Parse Arguments
 PARAMS=""
 BLACKLIST=""
-DEBUG=0
 while (( "$#" )); do
   case "$1" in
     -h|--help)
@@ -56,10 +55,6 @@ while (( "$#" )); do
         echo "ERROR: Argument for $1 is missing" >&2
         usage 1
       fi
-      ;;
-    -d|--debug)
-      DEBUG=1
-      shift
       ;;
     --) # end of options indicates that the main command follows
       shift
@@ -135,12 +130,13 @@ if [[ ! -r $LIBRARY ]]; then
   exit 1
 fi
 
-#set the correct argument for reverse complement
-if [[ $REVCOMP == 1 ]]; then
-  RCARG="--rc"
-else
-  RCARG=""
-fi
+#bartender doesn't accept flanking sequences longer than 5bp
+#so we trunkate them accordingly here
+FLINES=(`cat $FLANKING`)
+UPSTREAM=${FLINES[1]:(-5):5}
+DOWNSTREAM=${FLINES[3]:0:5}
+#and use them to construct the bartender extraction pattern
+PATTERN="${UPSTREAM}[$((BCLEN-BCMAXERR))-$((BCLEN+BCMAXERR))]${DOWNSTREAM}"
 
 #Create output directory for this run
 WORKSPACE=${TITLE}_$(date +%Y%m%d_%H%M%S)/
@@ -151,7 +147,7 @@ cp "$SAMPLES" "$WORKSPACE/samples.txt"
 
 #create folders for logs and temporary chunk files
 mkdir -p ${WORKSPACE}logs
-mkdir -p ${WORKSPACE}chunks
+mkdir -p ${WORKSPACE}extract
 mkdir -p ${WORKSPACE}counts
 mkdir -p ${WORKSPACE}scores
 
@@ -180,53 +176,30 @@ function validateFASTQs() {
   done
   echo "$R1FQS"
 }
-R1FQS="$(validateFASTQs)"
-#the code block below was superceded by the new function above
-# #if we're in paired-end mode, look for R1 and R2 files separately
-# if [[ $PAIREDEND == 1 ]]; then
-#   R1FQS=$(ls $INPUTFOLDER/*_R1_*fastq.gz)
-#   #Do a preliminary scan to see if all files are accounted for
-#   for R1FQ in $R1FQS; do
-#     R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
-#     if  [[ ! -r "$R2FQ" ]]; then
-#       echo "ERROR: Unable to find or read R2 file $R2FQ !">&2
-#       exit 1
-#     fi
-#   done
-# else
-#   #otherwise just use all fastq files directly
-#   R1FQS=$(ls $INPUTFOLDER/*fastq.gz)
-# fi
 
-#helper function to process a list of FASTQ chunks
 processChunks() {
 
-  CHUNKS=$1
+  CHUNKS="$1"
 
   JOBS=""
   echo "Processing chunks on HPC cluster."
   for CHUNK in $CHUNKS; do
-    TAG=barseq$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
+    # TAG=barseq$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
+    TAG="bt$(basename ${CHUNK%.fastq*})"
 
-    if [[ $PAIREDEND == 1 ]]; then
-      R2CHUNK=$(echo "$CHUNK"|sed -r "s/_R1_/_R2_/")
-      R2FLAG="--r2 $R2CHUNK"
-    else 
-      R2FLAG=""
-    fi
-
-    if [[ $DEBUG == 1 ]]; then
-      DEBUGARG="--debug"
+    #set the correct argument for reverse complement
+    if [[ $REVCOMP == 1 ]]; then
+      RCARG="rc"
     else
-      DEBUGARG=""
+      RCARG="f"
     fi
 
     #start barseq.R job and capture the job-id number
     RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log \
       -e ${WORKSPACE}logs/${TAG}.log -t 24:00:00 $BLARG \
-      -m 12G -c 4 \
-      barseq_caller.R $RCARG $DEBUGARG --flanking $FLANKING --bcLen $BCLEN \
-      --maxErr $BCMAXERR --r1 $CHUNK $R2FLAG $LIBRARY)
+      -m 16G -c 8 \
+      bartender_wrapper.sh -d $RCARG -p "$PATTERN" -m $BCMAXERR \
+      -q "?" -t 8 -w ${WORKSPACE}/ $CHUNK )
     JOBID=${RETVAL##* }
     if [ -z "$JOBS" ]; then
       #if jobs is empty, set it to the new ID
@@ -264,90 +237,52 @@ checkForFailedJobs() {
   echo "$FAILEDCHUNKS"
 }
 
-for R1FQ in $R1FQS; do
 
-  echo ""
-  echo "Processing $R1FQ"
+R1FQS="$(validateFASTQs)"
+processChunks "$R1FQS"
+echo "Validating jobs..."
+FAILEDCHUNKS=$(checkForFailedJobs "$R1FQS")
 
-  #output file
-  OUTFILE=${WORKSPACE}counts/$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_counts.txt/")
-
-  #prefix for input chunks
-  R1PREFIX=$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_/")
-
-  echo "Splitting FASTQ file into chunks"
-  zcat "$R1FQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
-    "${WORKSPACE}chunks/$R1PREFIX"
-  CHUNKS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*.fastq)
-
-  #deal with R2 reads
-  if [[ $PAIREDEND == 1 ]]; then
-    #infer name of R2 file again (we already checked for its existence above)
-    R2FQ=$(echo "$R1FQ"|sed -r "s/_R1_/_R2_/")
-    R2PREFIX=$(basename "$R2FQ"|sed -r "s/\\.fastq\\.gz$/_/")
-    zcat "$R2FQ"|split -a 3 -l 200000 --additional-suffix .fastq - \
-      "${WORKSPACE}chunks/$R2PREFIX"
+#If any jobs failed, try 2 more times
+TRIES=1
+while ! [[ -z $FAILEDCHUNKS ]]; do
+  if [[ $TRIES < 3 ]]; then
+    echo "Attempting to re-run failed jobs."
+    processChunks "$FAILEDCHUNKS"
+    echo "Validating jobs..."
+    FAILEDCHUNKS=$(checkForFailedJobs "$R1FQS")
+    ((TRIES++))
+  else
+    echo "ERROR: Exhausted 3 attempts at re-running failed jobs!">&2
+    exit 1
   fi
-
-  #process chunks and wait for completion
-  processChunks "$CHUNKS"
-  echo "Validating jobs..."
-  FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
-
-  #If any jobs failed, try 2 more times
-  TRIES=1
-  while ! [[ -z $FAILEDCHUNKS ]]; do
-    if [[ $TRIES < 3 ]]; then
-      echo "Attempting to re-run failed jobs."
-      processChunks "$FAILEDCHUNKS"
-      echo "Validating jobs..."
-      FAILEDCHUNKS=$(checkForFailedJobs "$CHUNKS")
-      ((TRIES++))
-    else
-      echo "ERROR: Exhausted 3 attempts at re-running failed jobs!">&2
-      exit 1
-    fi
-  done
-
-
-  #Consolidate exception counts
-  FAILEDEXTRACTION=0
-  NOMATCH=0
-  AMBIGUOUS=0
-  for CHUNK in $CHUNKS; do
-    TAG=$(echo $CHUNK|sed -r "s/.*_|\\.fastq//g")
-    LOG=${WORKSPACE}logs/barseq${TAG}.log
-    EXCLINE=$(grep failedExtraction $LOG)
-    ((FAILEDEXTRACTION += $(extractRX $EXCLINE "failedExtraction=([0-9]+)") ))
-    ((NOMATCH += $(extractRX $EXCLINE "noMatch=([0-9]+)") ))
-    ((AMBIGUOUS += $(extractRX $EXCLINE "ambiguous=([0-9]+)") ))
-  done
-  echo "$R1PREFIX">>${WORKSPACE}/counts/exceptions.txt
-  echo "failedExtraction=$FAILEDEXTRACTION">>${WORKSPACE}/counts/exceptions.txt
-  echo "noMatch=$NOMATCH">>${WORKSPACE}/counts/exceptions.txt
-  echo "ambiguous=$AMBIGUOUS">>${WORKSPACE}/counts/exceptions.txt
-
-  #Consolidate individual result chunks
-  echo "Consolidating results..."
-  RESULTS=$(ls ${WORKSPACE}chunks/${R1PREFIX}*_hits.csv.gz)
-  zcat $RESULTS|cut -f 1 -d,|sort|uniq -c>$OUTFILE
-  if [[ $DEBUG == 1 ]]; then
-    DEBUGOUT=${WORKSPACE}counts/$(basename "$R1FQ"|sed -r "s/\\.fastq\\.gz$/_counts_debug.csv.gz/")
-    DEBUGFILES=$(ls ${WORKSPACE}chunks/${R1PREFIX}*_debug.csv.gz)
-    cat $DEBUGFILES>$DEBUGOUT
-    rm $DEBUGFILES
-  fi
-
-  #clean up 
-  rm $CHUNKS $RESULTS
-  tar czf "${WORKSPACE}logs/countLogs_${R1PREFIX}.tgz" ${WORKSPACE}logs/*log
-  rm ${WORKSPACE}logs/*log
-
 done
 
-#consolidates all OUTFILEs (*_counts.txt) into "allCounts.csv"
+echo "Cleaning up intermediate files..."
+# mv "${WORKSPACE}/*_barcode.*.gz" ${WORKSPACE}/extract/
+# mv "${WORKSPACE}/*_cluster.csv" ${WORKSPACE}/counts/
+tar czf ${WORKSPACE}/counts/qualityMatrices.tgz ${WORKSPACE}/counts/*_quality.csv&&rm ${WORKSPACE}/counts/*_quality.csv
+
 echo "Consolidating counts from all samples..."
-barseq_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
+bartender_consolidator.R "${WORKSPACE}counts/" "$SAMPLES" "$LIBRARY"
+
+#compress intermediate files
+echo "Compressing files..."
+gzip ${WORKSPACE}/counts/*_cluster.csv
+
+
+#assemble parameter list for bartender_combiner
+# COMBOLIST=""
+# for R1FQ in $R1FQS; do
+#   PREFIX=${WORKSPACE}/$(basename ${R1FQ%.fastq.gz})
+#   if [[ -z "$COMBOLIST" ]]; then
+#     COMBOLIST="${PREFIX}_cluster.csv,${PREFIX}_quality.csv"
+#   else
+#     COMBOLIST="${COMBOLIST},${PREFIX}_cluster.csv,${PREFIX}_quality.csv"
+#   fi
+# done
+# #run bartender combiner to consolidate results
+# bartender_combiner_com -f "$COMBOLIST" -c 1 -o "${WORKSPACE}/counts/rawCounts"
 
 if [[ -n $BNFILTER ]]; then
   BNARG="--bnFilter $BNFILTER"
@@ -364,7 +299,8 @@ echo "Calculating enrichment ratios and scores..."
 barseq_enrichment.R "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}scores/" $FFARG $BNARG
 
 echo "Running QC"
-barseq_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}qc/" $FFARG $BNARG
+#FIXME: Need to process different QC
+bartender_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}qc/" --logfolder "${WORKSPACE}logs/" $FFARG $BNARG
 
 #cleanup temp files
 rm tmp/*&&rmdir tmp

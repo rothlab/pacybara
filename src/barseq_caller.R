@@ -36,6 +36,7 @@ p <- add_argument(p, "--output", help="output file. Defaults to <fastq>_hits.csv
 p <- add_argument(p, "--flanking", help="FASTA file containing the barcode flanking sequences",default="flanking.fasta")
 p <- add_argument(p, "--rc", help="use reverse complement of reads",flag=TRUE)
 p <- add_argument(p, "--maxErr", help="Maximum allowed number of errors in barcode",default=2L)
+p <- add_argument(p, "--debug", help="Enable debug mode to record detailed calls", flag=TRUE)
 args <- parse_args(p)
 
 # args <- list(
@@ -88,6 +89,9 @@ outfile <- args$output
 if (is.na(outfile)) {
   outfile <- sub("\\.fastq.*$","_hits.csv.gz",r1File)
 }
+if (args$debug) {
+  debugfile <- sub(".csv.gz$","_debug.csv.gz",outfile)
+}
 
 
 #open file connection and create FASTQ parser
@@ -114,6 +118,11 @@ if (!is.na(r2File)) {
 #open output connection
 outcon <- gzfile(outfile,open="w")
 cat("hits,diffs,nhits\n",file=outcon)
+
+if (args$debug) {
+  debugcon <- gzfile(debugfile,open="w")
+  cat("readID,bc1,bc2,hits,diffs,nhits\n",file=debugcon)
+}
 
 cat("Processing FASTQ file.\n")
 progress <- 0
@@ -226,14 +235,31 @@ while (length(reads <- fqp1$parse.next(100,ignore.quality=TRUE)) > 0) {
 
 
   #find matches
-  # system.time({
-    matches <- matcher$findMatches(bcReads,bcReads2)
-  # })
+  #matches is a matrix with rows for each bcReads entry and the following columns:
+  #hits: list of library row numbers with matching barcodes; 
+  #diffs: the edit distance between barcode and match; 
+  #nhits: the number of equidistant hits
+  matches <- matcher$findMatches(bcReads,bcReads2)
 
   #record reasons for rejected reads
   exceptions$add("failedExtraction",sum(naReads))
   exceptions$add("noMatch",sum(unlist(matches[,3])==0 & !naReads))
   exceptions$add("ambiguous",sum(unlist(matches[,3])>1))
+
+  if (args$debug) {
+    rids <- sapply(reads,function(ys)ys$getID())
+    debug <- data.frame(
+      row.names=NULL,
+      read=rids,
+      r1BC=bcReads,
+      r2BC=bcReads2,
+      hits=sapply(matches[,1],paste,collapse="|"),
+      diffs=unlist(matches[,2]),
+      nhits=unlist(matches[,3])
+    )
+    write.table(debug,debugcon,col.names=FALSE,quote=FALSE,row.names=FALSE,sep=",")
+    flush(debugcon)
+  }
 
   #remove ambiguous matches
   if (any(matches$nhits > 1)) {
@@ -250,6 +276,7 @@ cat("\n")
 #close file connections
 close(con1)
 if (exists("con2")) close(con2)
+if (exists("debugcon")) close(debugcon)
 close(outcon)
 
 #print exception counts to log file

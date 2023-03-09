@@ -28,4 +28,5 @@ dependencies:
   - emboss
   - bwa
   - bowtie2
+  - ncurses
   - samtools
