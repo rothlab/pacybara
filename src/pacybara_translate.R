@@ -50,7 +50,7 @@ fcon <- file(pargs$reference,open="r")
 refSeq <- yogiseq::readFASTA(fcon)[[1]]$toString()
 close(fcon)
 
-orfSeq <- substr(refSeq,pargs$orfStart,pargs$orfEnd)
+orfSeq <- toupper(substr(refSeq,pargs$orfStart,pargs$orfEnd))
 orfLen <- nchar(orfSeq)
 
 #re-calculate collisions
