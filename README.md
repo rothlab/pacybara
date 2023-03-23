@@ -62,6 +62,18 @@ The output directory will contain multiple items:
     * `clusters_transl_softfilter.csv.gz` is filtered less strictly. It still requires >1 CCS read, but allows clones from barcode collisions as long as they dominate that barcode with at least a 2/3 majority.
     * Within the `*_clustering` directory you will also find a `qc/` sub-directory. This contains a number of QC plots.
 
+### QC plots
+In the `*_clustering/qc/` folder, there are several plots to visualize aspects of the data:
+
+* `barcodeBias_*.pdf` shows whether there are nucleotide biases in the barcode
+* `clusterSizes.pdf` shows a histogram of reads per clone before and after clustering. (i.e. using traditional perfect barcode matching vs pacybara's clustering method)
+* `compromisedBC.pdf` shows the breakdown of the soft filtering method above (i.e. how many clones had unique barcods, vs non-unique with dominant clone and non-unique without dominant clone)
+* `extractionQC.pdf` shows how many reads were successfully processed vs how many reads were disqualified for various reasons
+* `jackpots.pdf` shows whether there are any suspiciously highly-abundant clones
+* `nuclBias.pdf` shows nucleotide biases in SNVs and MNVs found in the library (separated by position in a given codon)
+* `pb_census.pdf` shows how many clones had how many mutations
+* `pb_coverage.pdf` shows a spatial coverage heatmap of mutations across the template sequence.
+
 ## Converting the Pacybara output for use with barseqPro.
 The barseqPro software requires a library of barcode associations. This table can be made using any of the `clusters_transl*` tables, depending on the desired filtering level. I recommend using the `softfilter` version for best results. To convert it to the required format,
 you can use the `pacybara_preplib.R` script:

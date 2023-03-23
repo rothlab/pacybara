@@ -498,4 +498,7 @@ pacybara_qc.R "${CLUSTERDIR}/clusters_transl.csv.gz" \
 pacybara_qc.R "${CLUSTERDIR}/clusters_transl_softfilter.csv.gz" \
   "${EXTRACTDIR}/" "${CLUSTERDIR}/qc" --softFilter
 
+#move and rename the softfilter pdf output
+mv "${CLUSTERDIR}/clusters_transl_softfilter.pdf" "${CLUSTERDIR}/qc/compromisedBC.pdf"
+
 echo "Done!"
