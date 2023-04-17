@@ -277,6 +277,8 @@ bwa index -a is "$REFFASTANOBC"
 
 #create workspace directory if it doesn't exist yet
 mkdir -p "$WORKSPACE"
+#make a copy of the parameter sheet in the workspace
+cp "$PARAMETERS" "$WORKSPACE/"
 
 #create directory for file chunks
 OUTPREFIX=$(basename ${INFASTQ%.fastq.gz})
