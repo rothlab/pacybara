@@ -1,12 +1,10 @@
-# Pacybara and BarseqPro
+# Pacybara 
 
 Pacybara is a long-read barcode clustering method designed for multiplexed assays of variant effect (MAVEs).
 
-BarseqPro is an accompanying BarSeq MAVE analysis pipeline.
-
 ## Pre-requisites and installation:
-1. Pacybara and barseqPro are designed for a Slurm or PBS HPC cluster.
-    * A single-node version of pacybara is also provided, but not recommended due to very long runtimes.
+1. Pacybara is designed for high-performance compute (HPC) clusters running Slurm, PBS, or Univa Grid Engine.
+    * If you do not have access to HPC hardware, you may try the experimental single-instance version of pacybara. However, we strongly recommend using the HPC version to avoid excessively long runtimes.
 2. Install [`clusterutil`](https://github.com/jweile/clusterutil). This handles the abstraction between Slurm and PBS interfaces.
 3. Download or clone the code repository:
     * Either via git: `git clone https://github.com/rothlab/pacybara.git`
