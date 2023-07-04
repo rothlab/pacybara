@@ -28,11 +28,12 @@ by Jochen Weile <jochenweile@gmail.com> 2021
 
 A convenient wrapper for Bartender that performs lookups against Pacybara
 libraries and performs downstream analysis
-Usage: pacybartender.sh [-b|--blacklist <BLACKLIST>] <INDIR> <PARAMS>
+Usage: pacybartender.sh [-b|--blacklist <BLACKLIST>] [-c|--conda <ENV>] <INDIR> <PARAMS>
 
 <INDIR>        : The input directory containing the fastq.gz files
 <PARAMS>       : A barseq parameter sheet file
 -b|--blacklist : An optional comma-separated blacklist of nodes to avoid
+-c|--conda     : Conda environment to activate for bartender jobs (for python2.7)
 
 EOF
  exit $1
@@ -41,6 +42,7 @@ EOF
 #Parse Arguments
 PARAMS=""
 BLACKLIST=""
+CONDAARG=""
 while (( "$#" )); do
   case "$1" in
     -h|--help)
@@ -50,6 +52,15 @@ while (( "$#" )); do
     -b|--blacklist)
       if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
         BLACKLIST=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -c|--conda)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        CONDAARG="--conda $2"
         shift 2
       else
         echo "ERROR: Argument for $1 is missing" >&2
@@ -189,7 +200,7 @@ processChunks() {
     #start barseq.R job and capture the job-id number
     RETVAL=$(submitjob.sh -n $TAG -l ${WORKSPACE}logs/${TAG}.log \
       -e ${WORKSPACE}logs/${TAG}.log -t 24:00:00 $BLARG \
-      -m 16G -c 8 \
+      -m 16G -c 8 $CONDAARG \
       bartender_wrapper.sh -d $RCARG -p "$PATTERN" -m $BCMAXERR \
       -q "?" -t 8 -w ${WORKSPACE}/ $CHUNK )
     JOBID=${RETVAL##* }
