@@ -241,8 +241,7 @@ OUTFILE="${OUTPREFIX}_subassembly.txt"
 #align to template
 if [[ ! -s "$ALNFILE" ]]; then
   echo "Running alignment..."
-  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -u - \
-    | samtools sort -o "$ALNFILE" - 
+  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -o "$ALNFILE" - 
   # dieOnError $? !!
 else
   echo "Using existing alignment"
@@ -272,9 +271,18 @@ fi
 #extract barcodes
 if [[ ! -s $EXTRACTFILE ]]; then
   echo "Extracting barcodes..."
+  #if the barcode is located 5' of the ORF, then we need to adjust the position 
+  #relative to the cropped reference
+  if (( $BCPOS < $ORFSTART )); then
+    ORFSTARTADJ=$(($ORFSTART-$BLEN-1))
+    ORFENDADJ=$(($ORFEND-$BLEN))
+  else 
+    ORFSTARTADJ=$((ORFSTART-1))
+    ORFENDADJ=$ORFEND
+  fi
   python AssemblyByPacBio/extractBarcodeInsertPairs_moreQC.py "$ALNFILE2" \
     --length=$BLEN --position=$((BCPOS-1)) \
-    --start=$(($ORFSTART-$BLEN-1)) --end=$(($ORFEND-$BLEN)) \
+    --start=$ORFSTARTADJ --end=$ORFENDADJ \
     | gzip -c >"$EXTRACTFILE"
   # dieOnError $? !!
 else 
@@ -299,7 +307,7 @@ conda activate msa_ccs
 echo "Running PacRat..."
 python3.6 PacRAT/msa_pacbio.py -d "$OUTFOLDER" -o "$OUTFILE" \
   --highQual <(gzip -cd "$HIQFILE") --inputSeqs <(gzip -cd "$EXTRACTFILE") \
-  -c $MINREADS -t $MINFREQ -s -r -m $(which muscle) -n $(which needle)
+  -c $MINREADS -t $MINFREQ -s -r -m $(readlink -f scripts/muscle) -n $(which needle)
 # dieOnError $? !!
 
 #compressing result file

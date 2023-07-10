@@ -1,0 +1,44 @@
+#!/bin/bash
+
+#MUSCLE compatibility wrapper
+
+PARAMS=""
+while (( "$#" )); do
+  case "$1" in
+    -in)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        IN=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;
+    -out)
+      if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+        OUT=$2
+        shift 2
+      else
+        echo "ERROR: Argument for $1 is missing" >&2
+        usage 1
+      fi
+      ;;  
+    --) # end of options indicates that only positional arguments follow
+      shift
+      PARAMS="$PARAMS $@"
+      eval set -- ""
+      ;;
+    -*|--*=) # unsupported flags
+      echo "ERROR: Unsupported flag $1" >&2
+      usage 1
+      ;;
+    *) # positional parameter
+      PARAMS="$PARAMS $1"
+      shift
+      ;;
+  esac
+done
+#reset command arguments as only positional parameters
+eval set -- "$PARAMS"
+
+muscle -align "$IN" -output "$OUT"
