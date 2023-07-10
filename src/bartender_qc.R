@@ -19,6 +19,7 @@
 options(stringsAsFactors=FALSE)
 
 library(argparser)
+library(yogitools)
 
 p <- arg_parser(
   "draw QC plots for pacybartender",
@@ -34,7 +35,7 @@ p <- add_argument(p, "--freqFilter", help="frequency filter cutoff",default=5e-7
 p <- add_argument(p, "--bnFilter", help="bottleneck filter count cutoff",default=-Inf)
 pargs <- parse_args(p)
 
-# pargs <- list(lrs="scores/allLRs.csv",counts="counts/allCounts.csv",samples="~/tmp/nishka/samples.txt",outdir="qc/",freqFilter=5e-7,bnFilter=-Inf)
+# pargs <- list(lrs="scores/allLRs.csv",counts="counts/allCounts.csv",samples="samples.txt",outdir="qc/",freqFilter=5e-7,bnFilter=-Inf)
 
 dir.create(pargs$outdir,recursive=TRUE)
 
@@ -83,6 +84,33 @@ for (fcol in fcols) {
 par(op)
 invisible(dev.off())
 
+
+
+synCountIdx <- sapply(strsplit(gsub("p\\.|\\[|\\]","",counts$hgvsp),";"), function(muts) {
+  all(grepl("=$",muts))
+})
+wtCountIdx <- counts$codonChanges=="WT"
+stopCountsIdx <- grepl("Ter",counts$hgvsp)
+fsCountIdx <- grepl("fs",counts$aaChanges)
+
+
+conditionCombos <- do.call(c,lapply(unique(samples$assay),function(assay) {
+  conds <- unique(samples[samples$assay==assay,"condition"])
+  selConds <- setdiff(conds,"All")
+  allName <- sprintf("%s.%s",assay,"All")
+  lapply(selConds,function(selCond) {
+    c(allName,sprintf("%s.%s",assay,selCond))
+  })
+}))
+
+pdf(paste0(pargs$outdir,"countChange.pdf"),8.5,11)
+op <- par(mfrow=c(2,2))
+lapply(conditionCombos, function(combo) {
+  plot(cmeans[which(synCountIdx | wtCountIdx),combo]+.1,col=yogitools::colAlpha("chartreuse3",.2),pch=20,log="xy")
+  points(cmeans[which(stopCountsIdx | fsCountIdx),combo]+.1,col=yogitools::colAlpha("firebrick3",.2),pch=20)
+})|>invisible()
+par(op)
+invisible(dev.off())
 
 
 # panelfun <- function(x,y,...) {
