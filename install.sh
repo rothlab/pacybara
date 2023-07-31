@@ -93,15 +93,57 @@ done
 #reset command arguments as only positional parameters
 eval set -- "$PARAMS"
 
+checkPath() {
+  VIABLE=""
+  for LOCATION in $(echo $PATH|tr : "\n"|sort|uniq); do
+    if [[ -w ${LOCATION} ]]; then
+      if [[ -z $VIABLE ]]; then
+        VIABLE=$LOCATION
+      else
+        VIABLE="${VIABLE} ; $LOCATION"
+      fi
+    fi
+  done
+  echo "$VIABLE"
+}
+
+#helper function to check if user wants to proceed with installation.
+checkProceed() {
+  sleep 1
+  printf "\nAre you sure you want to proceed anyway? [y/n]: "
+  read -r ANSWER
+  if ! [[ $ANSWER == "y" || $ANSWER == "yes" ]]; then
+    exit 1
+  fi
+}
+
+#Check that PREFIX is writable and listed in PATH
+if ! [[ -w $PREFIX ]]; then
+  printf "\033[0;31mERROR: You don't have permissions to write to your chosen installation directory (${PREFIX}).
+
+Please use the --PREFIX option to choose a more appropriate target directory. \033[0m\n">&2
+
+  exit 1
+
+elif ! [[ $PATH == *${PREFIX}:* ]]; then 
+
+  printf "\033[1;33mWARNING: Your chosen installation directory (${PREFIX}) is not listed in your \$PATH variable, which means that your command shell would be unable to find it there.
+
+Please use the --PREFIX option to choose a more appropriate target directory. For example, here are some writable locations listed in your \$PATH that could work: $(checkPath)
+
+Alternatively, you could add $PREFIX to your \$PATH definition in your .bashrc file.\033[0m\n"
+  checkProceed
+fi
+
 #Check for the presence of clusterutil
 if [[ -z $(command -v "waitForJobs.sh") ]] ; then
-  echo "Warning: clusterutil does not appear to be installed!">&2
-  echo "You will not be able to use HPC multiplexing without!">&2
-  sleep 1
+  printf "\033[1;33mWARNING: clusterutil does not appear to be installed!
+You will not be able to use HPC multiplexing without it.\033[0m\n"
+  checkProceed
 fi
 #check that we're in the conda base environment
 if ! [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
-  echo "ERROR: You must run this installer from your conda 'base' environment!">&2
+  printf "\033[0;31mERROR: You must run this installer from your conda 'base' environment!\033[0m\n">&2
   exit 1
 fi
 
@@ -109,12 +151,12 @@ fi
 if [[ $CONDA == 1 ]]; then
   #Check for presence of conda
   if [[ -z $(command -v "conda") ]] ; then
-    echo "ERROR: conda is not installed! Unable to proceed!">&2
-    echo "Please either install anaconda/miniconda or use the --skipCondaEnv argument.">&2
+    printf "\033[0;31mERROR: conda is not installed! Unable to proceed!
+Please either install anaconda/miniconda or use the --skipCondaEnv argument.\033[0m\n">&2
     exit 1
   fi
   if conda env list|grep -q pacybara; then
-    echo "Warning: Conda environment 'pacybara' already exists. Skipping conda setup.">&2
+    printf "\033[1;33mWARNING: Conda environment 'pacybara' already exists. Skipping conda setup.\033[0m\n">&2
     sleep 1
   else
     conda env create -f pacybara_env.yml
@@ -130,13 +172,13 @@ if [[ $DEPENDENCIES == 1 ]]; then
       source "$CONDA_PREFIX/etc/profile.d/conda.sh"
       conda activate pacybara
     else 
-      echo "ERROR: The pacybara conda environment could not be found!">&2
+      printf "\033[0;31mERROR: The pacybara conda environment could not be found!\033[0m\n">&2
       exit 1
     fi
   #otherwise we install it into the default R installation.
   elif [[ -z $(command -v Rscript) ]] ; then
-    echo "ERROR: Conda setup was skipped, but no separate R installation was found!">&2
-    echo "If you really want to skip the conda setup, please install all dependencies manually first.">&2
+    printf "\033[0;31mERROR: Conda setup was skipped, but no R installation was found in the conda environment!
+If you really want to skip the conda setup, please manually install all dependencies first.\033[0m\n">&2
     exit 1
   fi
   #install required R packages
