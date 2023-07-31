@@ -110,7 +110,7 @@ msd <- do.call(cbind,pbmclapply(conds,function(smpl) {
 countMeans <- do.call(cbind,pbmclapply(conds,function(smpl){
   data.frame(
     mean=apply(countsOnly[,smpl],1,mean),
-    sd=apply(freqs[,smpl],1,sd)
+    sd=apply(countsOnly[,smpl],1,sd)
   )
 },mc.cores=6))
 
