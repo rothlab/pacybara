@@ -106,15 +106,18 @@ else
   BLARG="--blacklist $BLACKLIST"
 fi
 
+TMPDIR=$(mktemp -d -p ./)
+
 #helper function to extract relevant sections from a parameter file
 extractParamSection() {
   INFILE="$1"
   SECTION="$2"
-  mkdir -p tmp
+  TMPDIR="$3"
+  # mkdir -p tmp
   case "$SECTION" in
-    ARGUMENTS) TMPFILE=$(mktemp -p tmp/);;
-    *SEQUENCE*) TMPFILE=$(mktemp -p tmp/ --suffix=.fasta);;
-    SAMPLE) TMPFILE=$(mktemp -p tmp/ --suffix=.tsv);;
+    ARGUMENTS) TMPFILE=$(mktemp -p "$TMPDIR");;
+    *SEQUENCE*) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.fasta);;
+    SAMPLE) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.tsv);;
     *) echo "Unrecognized section selected!"&&exit 2;;
   esac
   RANGE=($(grep -n "$SECTION" "$INFILE"|cut -f1 -d:))
@@ -130,10 +133,10 @@ extractRX() {
 }
 
 #Load parameters
-source $(extractParamSection $PARAMETERS ARGUMENTS)
-FLANKING=$(extractParamSection $PARAMETERS 'FLANKING SEQUENCES')
-SAMPLES=$(extractParamSection $PARAMETERS SAMPLE)
-CDS=$(extractParamSection $PARAMETERS 'CODING SEQUENCE')
+source $(extractParamSection $PARAMETERS ARGUMENTS "$TMPDIR")
+FLANKING=$(extractParamSection $PARAMETERS 'FLANKING SEQUENCES' "$TMPDIR")
+SAMPLES=$(extractParamSection $PARAMETERS SAMPLE "$TMPDIR")
+CDS=$(extractParamSection $PARAMETERS 'CODING SEQUENCE' "$TMPDIR")
 
 #validate parameters
 if [[ ! -r $LIBRARY ]]; then
@@ -307,6 +310,6 @@ echo "Running QC"
 bartender_qc.R "${WORKSPACE}scores/allLRs.csv" "${WORKSPACE}counts/allCounts.csv" "$SAMPLES" "${WORKSPACE}qc/" --logfolder "${WORKSPACE}logs/" $FFARG $BNARG
 
 #cleanup temp files
-rm tmp/*&&rmdir tmp
+rm -r "$TMPDIR"
 
 echo "Done!"

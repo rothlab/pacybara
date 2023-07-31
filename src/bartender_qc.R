@@ -30,7 +30,7 @@ p <- add_argument(p, "counts", help="counts file")
 p <- add_argument(p, "samples", help="sample table txt file")
 p <- add_argument(p, "outdir", help="output directory")
 p <- add_argument(p, "--logfolder", help="folder containing bartender log files")
-p <- add_argument(p, "--deCumufy",help="counteract cumulative counts",flag=TRUE)
+# p <- add_argument(p, "--deCumufy",help="counteract cumulative counts",flag=TRUE)
 p <- add_argument(p, "--freqFilter", help="frequency filter cutoff",default=5e-7)
 p <- add_argument(p, "--bnFilter", help="bottleneck filter count cutoff",default=-Inf)
 pargs <- parse_args(p)
@@ -86,6 +86,7 @@ invisible(dev.off())
 
 
 
+
 synCountIdx <- sapply(strsplit(gsub("p\\.|\\[|\\]","",counts$hgvsp),";"), function(muts) {
   all(grepl("=$",muts))
 })
@@ -111,6 +112,40 @@ lapply(conditionCombos, function(combo) {
 })|>invisible()
 par(op)
 invisible(dev.off())
+
+
+### Gather data for read fate plot
+
+logsBySample <- sapply(samples$sample, function(sname) {
+  list.files(pargs$logfolder,pattern=sname,full.name=TRUE)
+})
+extractStats <- yogitools::as.df(lapply(logsBySample, function(lfile) {
+  lines <- readLines(lfile, 3L)
+  yogitools::extract.groups(lines,"there are (\\d+) ")[,1] |> 
+    as.integer()|>setNames(c("total","extract","passfilter"))
+}))
+extractStats$failedExtraction <- with(extractStats,total-extract)
+extractStats$failedFilter <- with(extractStats,extract-passfilter)
+
+nmFile <- sub("allCounts.csv$","noMatchCounts.csv",pargs$counts)
+nmTable <- read.csv(nmFile,row.names=1)
+nmStats <- t(apply(nmTable,2,function(cs) c(singletons=sum(cs==1),clustered=sum(cs[cs>1]))))
+nmStats <- nmStats[rownames(extractStats),]
+
+fateStats <- cbind(extractStats,noMatch=nmStats)
+fateStats$success <- with(fateStats, passfilter-(noMatch.singletons+noMatch.clustered))
+
+plotData <- t(fateStats[,-(1:3)])
+
+pdf(paste0(pargs$outdir,"readFates.pdf"),8.5,11)
+op <- par(las=3,mar=c(12,4,1,1),oma=c(10,2,2,2))
+plotcols=c("firebrick3","firebrick2","gold","orange","chartreuse3")
+barplot(plotData,col=plotcols,border=NA,ylab="reads")
+grid(NA,NULL)
+legend("right",rownames(plotData),fill=plotcols,bg="white")
+par(op)
+dev.off()
+
 
 
 # panelfun <- function(x,y,...) {
@@ -156,8 +191,9 @@ for (sample in sampleNames) {
   fcol <- paste0(sample,".allfreq")
   sdcol <- paste0(sample,".sd")
   lrcol <- paste0(sample,".lr")
+  nonzero <- which(!is.na(lrs[,lrcol]))
   plot(
-    lrs[,fcol]+pseudoCount, lrs[,sdcol]/lrs[,lrcol],
+    lrs[nonzero,fcol]+pseudoCount, lrs[nonzero,sdcol]/lrs[nonzero,lrcol],
     xlab="read frequency 'all'",ylab="CV(LR)",
     log="xy",pch=".",col=yogitools::colAlpha(1,0.2),
     main=sample
@@ -231,36 +267,3 @@ for (relCond in conds) {
   invisible(dev.off())
 
 }
-
-### Gather data for read fate plot
-
-logsBySample <- sapply(samples$sample, function(sname) {
-  list.files(pargs$logfolder,pattern=sname,full.name=TRUE)
-})
-extractStats <- yogitools::as.df(lapply(logsBySample, function(lfile) {
-  lines <- readLines(lfile, 3L)
-  yogitools::extract.groups(lines,"there are (\\d+) ")[,1] |> 
-    as.integer()|>setNames(c("total","extract","passfilter"))
-}))
-extractStats$failedExtraction <- with(extractStats,total-extract)
-extractStats$failedFilter <- with(extractStats,extract-passfilter)
-
-nmFile <- sub("allCounts.csv$","noMatchCounts.csv",pargs$counts)
-nmTable <- read.csv(nmFile,row.names=1)
-nmStats <- t(apply(nmTable,2,function(cs) c(singletons=sum(cs==1),clustered=sum(cs[cs>1]))))
-nmStats <- nmStats[rownames(extractStats),]
-
-fateStats <- cbind(extractStats,noMatch=nmStats)
-fateStats$success <- with(fateStats, passfilter-(noMatch.singletons+noMatch.clustered))
-
-plotData <- t(fateStats[,-(1:3)])
-
-pdf(paste0(pargs$outdir,"readFates.pdf"),8.5,11)
-op <- par(las=3,mar=c(12,4,1,1),oma=c(10,2,2,2))
-plotcols=c("firebrick3","firebrick2","gold","orange","chartreuse3")
-barplot(plotData,col=plotcols,border=NA,ylab="reads")
-grid(NA,NULL)
-legend("right",rownames(plotData),fill=plotcols,bg="white")
-par(op)
-dev.off()
-
