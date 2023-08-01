@@ -179,7 +179,17 @@ splitMuts <- lapply(
 #Build index of variant occurrence in clones (~marginal index)
 margIdx <- hash::hash()
 for (i in 1:length(splitMuts)) {
-  if (!any(grepl("Ter$|fs$",splitMuts[[i]]))) {
+  if (any(grepl("fs$",splitMuts[[i]]))) {
+    #don't register frameshifts
+  } else if (any(grepl("Ter$",splitMuts[[i]]))) {
+    #if it's nonsense, only register under nonsense
+    ks <- which(grepl("Ter$",splitMuts[[i]]))
+    for (mut in splitMuts[[i]][ks]) {
+      margIdx[[mut]] <- c(margIdx[[mut]],i)
+    }
+    margIdx[[nsmut]] <- c(margIdx[[nsmut]],i)
+  } else {
+    #if there are no nonsense and frameshift, register everything.
     for (mut in splitMuts[[i]]) {
       margIdx[[mut]] <- c(margIdx[[mut]],i)
     }
