@@ -187,7 +187,6 @@ for (i in 1:length(splitMuts)) {
     for (mut in splitMuts[[i]][ks]) {
       margIdx[[mut]] <- c(margIdx[[mut]],i)
     }
-    margIdx[[nsmut]] <- c(margIdx[[nsmut]],i)
   } else {
     #if there are no nonsense and frameshift, register everything.
     for (mut in splitMuts[[i]]) {
