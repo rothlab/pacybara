@@ -16,8 +16,15 @@ p <- arg_parser(
 )
 p <- add_argument(p, "parameters", help="input directory")
 p <- add_argument(p, "clustersFile", help="sample table file (*.csv.gz)")
+p <- add_argument(p, "--outFile", help="output file. Defaults to <clustersFile>_consensusSeqs.txt")
 pargs <- parse_args(p)
 # pargs <- list(parameters="/home/jweile/projects/pacybara/templates/20230725_pacybaraparam_CYP2C9_codonOptimized.txt",clustersFile="clusters_transl_softfilter.csv.gz")
+
+if (is.na(pargs$outFile)) {
+  outfile <- paste0(sub(".csv.gz$","",pargs$clustersFile),"_consensusSeqs.txt")
+} else {
+  outfile <- pargs$outFile
+}
 
 cat("Parsing parameters...\n")
 
@@ -72,7 +79,8 @@ mutSeqs <- do.call(c,pbmclapply(genos, function(muts) {
 
 out <- data.frame(barcode=clusters$upBarcode,consensus=mutSeqs)
 
-outfile <- paste0(sub(".csv.gz$","",pargs$clustersFile),"_consensusSeqs.txt")
+cat("Writing output to",outfile,"\n")
+
 write.table(out,outfile,sep="\t",row.names=FALSE,col.names=FALSE)
 
 cat("Success!\n")
