@@ -141,6 +141,17 @@ if [[ -z $(command -v "waitForJobs.sh") ]] ; then
 You will not be able to use HPC multiplexing without it.\033[0m\n"
   checkProceed
 fi
+#check whether conda, mamba or micromamba are installed
+if [[ -n $(command -v conda) ]]; then
+  CONDAMGR=conda
+elif [[ -n $(command -v mamba) ]]; then
+  CONDAMGR=mamba
+elif [[ -n $(command -v micromamba) ]]; then
+  CONDAMGR=micromamba
+elif [[ -n "$CONDAENV" ]]; then
+  printf "\033[0;31mERROR: No conda installation was found!\033[0m\n">&2
+  exit 1
+fi
 #check that we're in the conda base environment
 if ! [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
   printf "\033[0;31mERROR: You must run this installer from your conda 'base' environment!\033[0m\n">&2
@@ -155,11 +166,11 @@ if [[ $CONDA == 1 ]]; then
 Please either install anaconda/miniconda or use the --skipCondaEnv argument.\033[0m\n">&2
     exit 1
   fi
-  if conda env list|grep -q pacybara; then
+  if ${CONDAMGR} env list|grep -q pacybara; then
     printf "\033[1;33mWARNING: Conda environment 'pacybara' already exists. Skipping conda setup.\033[0m\n">&2
     sleep 1
   else
-    conda env create -f pacybara_env.yml
+    ${CONDAMGR} env create -f pacybara_env.yml
   fi
 fi
 
@@ -168,9 +179,9 @@ if [[ $DEPENDENCIES == 1 ]]; then
   # into that environment's R installation
   if [[ $CONDA == 1 ]]; then
     #so we need to activate the environment first
-    if conda env list|grep -q pacybara; then
-      source "$CONDA_PREFIX/etc/profile.d/conda.sh"
-      conda activate pacybara
+    if ${CONDAMGR} env list|grep -q pacybara; then
+      source "$CONDA_PREFIX/etc/profile.d/${CONDAMGR}.sh"
+      ${CONDAMGR} activate pacybara
     else 
       printf "\033[0;31mERROR: The pacybara conda environment could not be found!\033[0m\n">&2
       exit 1
