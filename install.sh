@@ -125,7 +125,7 @@ Please use the --PREFIX option to choose a more appropriate target directory. \0
 
   exit 1
 
-elif ! [[ $PATH == *${PREFIX}:* ]]; then 
+elif ! [[ $PATH == *${PREFIX%/}* ]]; then 
 
   printf "\033[1;33mWARNING: Your chosen installation directory (${PREFIX}) is not listed in your \$PATH variable, which means that your command shell would be unable to find it there.
 
