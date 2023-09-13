@@ -55,7 +55,7 @@ if (!is.numeric(pargs$bnFilter)) {
 }
 
 # pargs <- list(counts="counts/allCounts.csv",samples="~/tmp/upsamples.txt",outdir="~/tmp/",wtMed=NA,nsMed=NA,freqFilter=5e-7,bnFilter=-Inf)
-# pargs <- list(counts="counts/allCounts.csv",samples="samples.tsv",outdir="scores/")
+# pargs <- list(counts="counts/allCounts.csv",samples="samples.txt",outdir="scores/",wtMed=NA,nsMed=NA,freqFilter=5e-7,bnFilter=-Inf)
 
 counts <- read.csv(pargs$counts)
 samples <- read.delim(pargs$samples)
