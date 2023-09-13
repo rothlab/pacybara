@@ -63,10 +63,11 @@ if (!pargs$softFilter) {
 
   pdf(paste0(pargs$outdir,"clusterSizes.pdf"),7,5)
   opar <- par(las=3)
-  distros|>barplot(beside=TRUE,border=NA,
-    xlab="size",ylab="count",
+  (distros+.1)|>barplot(beside=TRUE,border=NA,
+    xlab="size",ylab="count",log="y",
     col=c("steelblue3","chartreuse3")
   )
+  grid(NA,NULL)
   par(opar)
   legend("topright",c("uptag counts","final cluster sizes"),fill=c("steelblue3","chartreuse3"))
   dev.off()
