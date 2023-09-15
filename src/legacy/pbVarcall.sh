@@ -149,7 +149,7 @@ echo "Calling mutations in chunks..."
 JOBS=""
 for CHUNK in chunks/chunk*; do
     ID=$(basename $CHUNK)
-    RETVAL=$(submitjob.sh -t "00:30:00" -n "$ID" \
+    RETVAL=$(submitjob.sh -t "24:00:00" -n "$ID" \
       -l "logs/${ID}.log" -e "logs/${ID}.log" \
       --conda "msa_ccs" --skipValidation $BLARG -- \
       pbVarcall_worker.sh "$CHUNK" "$REFSEQ")
@@ -167,7 +167,7 @@ waitForJobs.sh -v "$JOBS"
 echo "Translating results to amino acid levels..."
 for VARCALL in chunks/chunk*_varcall.txt; do
     ID=$(basename ${VARCALL%_*})
-    RETVAL=$(submitjob.sh -t "01:00:00" -n "$ID" -c 8\
+    RETVAL=$(submitjob.sh -t "24:00:00" -n "$ID" -c 8\
       -l "logs/${ID}_tr.log" -e "logs/${ID}_tr.log" \
       --conda "pacybara" --skipValidation $BLARG -- \
       pbVarcall_translate.R "$VARCALL" "$REFSEQ"
