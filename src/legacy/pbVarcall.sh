@@ -138,18 +138,20 @@ REFSEQ=$(extractParamSection $PARAMETERS 'CODING SEQUENCE')
 # fi
 
 #set outfile based on infile
-OUTFILE=$(echo "$INFILE"|sed -r "s/\\.txt.gz$/_varcalls.txt/")
+OUTFILE=$(echo "$INFILE"|sed -r "s/\\.txt.gz$/_varcalls_transl.csv/")
 
 #split file into chunks and process using worker scripts
 echo "Splitting file into chunks..."
-mkdir -p chunks
+mkdir -p chunks logs
 zcat "$INFILE"|split -l $NCHUNKS - chunks/chunk
 
 echo "Calling mutations in chunks..."
 JOBS=""
-for CHUNK in $(ls chunks/*); do
+for CHUNK in chunks/chunk*; do
     ID=$(basename $CHUNK)
-    RETVAL=$(submitjob.sh -t "00:30:00" -n "$ID" $BLARG -- \
+    RETVAL=$(submitjob.sh -t "00:30:00" -n "$ID" \
+      -l "logs/${ID}.log" -e "logs/${ID}.log" \
+      --conda "msa_ccs" --skipValidation $BLARG -- \
       pbVarcall_worker.sh "$CHUNK" "$REFSEQ")
     JOBID=${RETVAL##* }
     if [ -z "$JOBS" ]; then
@@ -160,22 +162,39 @@ for CHUNK in $(ls chunks/*); do
       JOBS=${JOBS},$JOBID
     fi
 done
+waitForJobs.sh -v "$JOBS"
 
+echo "Translating results to amino acid levels..."
+for VARCALL in chunks/chunk*_varcall.txt; do
+    ID=$(basename ${VARCALL%_*})
+    RETVAL=$(submitjob.sh -t "01:00:00" -n "$ID" -c 8\
+      -l "logs/${ID}_tr.log" -e "logs/${ID}_tr.log" \
+      --conda "pacybara" --skipValidation $BLARG -- \
+      pbVarcall_translate.R "$VARCALL" "$REFSEQ"
+    )
+done
 waitForJobs.sh -v "$JOBS"
 
 #consolidate outputs
 echo "Consolidating results..."
-cat chunks/*_varcall.txt>$OUTFILE&&rm chunks/*
+#write single header
+head -1 "$(ls chunks/chunk*_varcall_transl.csv|head -1)">"$OUTFILE"
+for OUTCHUNK in chunks/chunk*_varcall_transl.csv; do
+    tail -n +2 "$OUTCHUNK">>"$OUTFILE"
+done
 
-#translate variant calls to amino acid level
-echo "Translating results to amino acid levels..."
-RETVAL=$(submitjob.sh -t "02:00:00" -c 8 -n translate $BLARG -- \
-pbVarcall_translate.R "$OUTFILE" "$REFSEQ")
-JOBID=${RETVAL##* }
+# cat chunks/*_varcall.txt>$OUTFILE&&rm chunks/*
 
-waitForJobs.sh -v "$JOBID"
+# #translate variant calls to amino acid level
+# echo "Translating results to amino acid levels..."
+# RETVAL=$(submitjob.sh -t "02:00:00" -c 8 -n translate $BLARG -- \
+# pbVarcall_translate.R "$OUTFILE" "$REFSEQ")
+# JOBID=${RETVAL##* }
+
+# waitForJobs.sh -v "$JOBID"
 
 #cleanup 
+tar czf logs.tgz logs/&&rm -r logs
 rmdir chunks alignments
 
 echo "Done!"
