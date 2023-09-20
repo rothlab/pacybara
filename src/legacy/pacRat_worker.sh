@@ -241,7 +241,7 @@ OUTFILE="${OUTPREFIX}_subassembly.txt"
 #align to template
 if [[ ! -s "$ALNFILE" ]]; then
   echo "Running alignment..."
-  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -o "$ALNFILE" - 
+  bwa mem -t $THREADS -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -o "$ALNFILE" - 
   # dieOnError $? !!
 else
   echo "Using existing alignment"
@@ -261,8 +261,10 @@ fi
 #remove non-standard BAM fields for compatibility with pysam and re-index
 if [[ ! -s "${ALNFILE2}" ]]; then
   echo "Removing non-standard BAM fields..."
-  samtools view -h "$ALNFILE"|cut -f -14 |samtools view -Sb - > "$ALNFILE2" \
-    && samtools index -b "$ALNFILE2"
+  # samtools view -h "$ALNFILE"|cut -f -14 |samtools view -b - > "$ALNFILE2"
+  #sorting is necessary for indexing to work
+  samtools view -h "$ALNFILE"|cut -f -14 |samtools sort -O bam -o "$ALNFILE2" -
+  samtools index -b "$ALNFILE2"
   # dieOnError $? !!
 else
   echo "Using existing cropped alignment"
