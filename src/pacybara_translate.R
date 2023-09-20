@@ -57,8 +57,12 @@ orfLen <- nchar(orfSeq)
 cat("Calculating barcode collisions...\n")
 tagDups <- function(bcs) {
   contab <- table(bcs)
-  dupIdx <- hash(names(which(contab > 1)),TRUE)
-  bcs|>sapply(function(bc) if (is.null(dupIdx[[bc]])) "" else "collision")
+  if (all(contab==1)) {
+    return(rep("",length(bcs)))
+  } else {
+    dupIdx <- hash(names(which(contab > 1)),TRUE)
+    bcs|>sapply(function(bc) if (is.null(dupIdx[[bc]])) "" else "collision")
+  }
 }
 clusters$collision <- tagDups(clusters$virtualBarcode)
 clusters$upTagCollision <- tagDups(clusters$upBarcode)

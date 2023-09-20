@@ -55,7 +55,7 @@ if (!is.numeric(pargs$bnFilter)) {
 }
 
 # pargs <- list(counts="counts/allCounts.csv",samples="~/tmp/upsamples.txt",outdir="~/tmp/",wtMed=NA,nsMed=NA,freqFilter=5e-7,bnFilter=-Inf)
-# pargs <- list(counts="counts/allCounts.csv",samples="samples.tsv",outdir="scores/")
+# pargs <- list(counts="counts/allCounts.csv",samples="samples.txt",outdir="scores/",wtMed=NA,nsMed=NA,freqFilter=5e-7,bnFilter=-Inf)
 
 counts <- read.csv(pargs$counts)
 samples <- read.delim(pargs$samples)
@@ -110,7 +110,7 @@ msd <- do.call(cbind,pbmclapply(conds,function(smpl) {
 countMeans <- do.call(cbind,pbmclapply(conds,function(smpl){
   data.frame(
     mean=apply(countsOnly[,smpl],1,mean),
-    sd=apply(freqs[,smpl],1,sd)
+    sd=apply(countsOnly[,smpl],1,sd)
   )
 },mc.cores=6))
 
@@ -179,7 +179,16 @@ splitMuts <- lapply(
 #Build index of variant occurrence in clones (~marginal index)
 margIdx <- hash::hash()
 for (i in 1:length(splitMuts)) {
-  if (!any(grepl("Ter$|fs$",splitMuts[[i]]))) {
+  if (any(grepl("fs$",splitMuts[[i]]))) {
+    #don't register frameshifts
+  } else if (any(grepl("Ter$",splitMuts[[i]]))) {
+    #if it's nonsense, only register under nonsense
+    ks <- which(grepl("Ter$",splitMuts[[i]]))
+    for (mut in splitMuts[[i]][ks]) {
+      margIdx[[mut]] <- c(margIdx[[mut]],i)
+    }
+  } else {
+    #if there are no nonsense and frameshift, register everything.
     for (mut in splitMuts[[i]]) {
       margIdx[[mut]] <- c(margIdx[[mut]],i)
     }

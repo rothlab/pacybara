@@ -1,12 +1,10 @@
-# Pacybara and BarseqPro
+# Pacybara 
 
 Pacybara is a long-read barcode clustering method designed for multiplexed assays of variant effect (MAVEs).
 
-BarseqPro is an accompanying BarSeq MAVE analysis pipeline.
-
 ## Pre-requisites and installation:
-1. Pacybara and barseqPro are designed for a Slurm or PBS HPC cluster.
-    * A single-node version of pacybara is also provided, but not recommended due to very long runtimes.
+1. Pacybara is designed for high-performance compute (HPC) clusters running Slurm, PBS, or Univa Grid Engine.
+    * If you do not have access to HPC hardware, you may try the experimental single-instance version of pacybara. However, we strongly recommend using the HPC version to avoid excessively long runtimes.
 2. Install [`clusterutil`](https://github.com/jweile/clusterutil). This handles the abstraction between Slurm and PBS interfaces.
 3. Download or clone the code repository:
     * Either via git: `git clone https://github.com/rothlab/pacybara.git`
@@ -61,6 +59,18 @@ The output directory will contain multiple items:
     * `clusters_transl_filtered.csv.gz` is the same, but filtered for clones supported by >1 CCS read and no barcode collisions.
     * `clusters_transl_softfilter.csv.gz` is filtered less strictly. It still requires >1 CCS read, but allows clones from barcode collisions as long as they dominate that barcode with at least a 2/3 majority.
     * Within the `*_clustering` directory you will also find a `qc/` sub-directory. This contains a number of QC plots.
+
+### QC plots
+In the `*_clustering/qc/` folder, there are several plots to visualize aspects of the data:
+
+* `barcodeBias_*.pdf` shows whether there are nucleotide biases in the barcode
+* `clusterSizes.pdf` shows a histogram of reads per clone before and after clustering. (i.e. using traditional perfect barcode matching vs pacybara's clustering method)
+* `compromisedBC.pdf` shows the breakdown of the soft filtering method above (i.e. how many clones had unique barcods, vs non-unique with dominant clone and non-unique without dominant clone)
+* `extractionQC.pdf` shows how many reads were successfully processed vs how many reads were disqualified for various reasons
+* `jackpots.pdf` shows whether there are any suspiciously highly-abundant clones
+* `nuclBias.pdf` shows nucleotide biases in SNVs and MNVs found in the library (separated by position in a given codon)
+* `pb_census.pdf` shows how many clones had how many mutations
+* `pb_coverage.pdf` shows a spatial coverage heatmap of mutations across the template sequence.
 
 ## Converting the Pacybara output for use with barseqPro.
 The barseqPro software requires a library of barcode associations. This table can be made using any of the `clusters_transl*` tables, depending on the desired filtering level. I recommend using the `softfilter` version for best results. To convert it to the required format,

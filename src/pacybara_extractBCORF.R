@@ -340,15 +340,15 @@ processSAMs <- function(sam.file,refFasta,outdir,chunkSize=100,bcLen=25,
             qualNum <- sapply(bg$genotype$qual,function(q) 
               as.integer(round(mean(as.integer(charToRaw(q))-33)))
             )
-            muts <- sapply(1:nrow(bg$genotype), function(i) with(bg$genotype[i,],{
+            muts <- do.call(c,lapply(1:nrow(bg$genotype), function(i) with(bg$genotype[i,],{
               #convert reference position to relative position (wrt ORF)
               relpos <- refpos-orfStart+1
               switch(op,
                 sub=sprintf("%d%s>%s:%d",relpos,refbase,readbase,qualNum[[i]]),
                 ins=sprintf("%dins%s:%d",relpos,readbase,qualNum[[i]]),
-                del=sprintf("%ddel:%d",relpos,qualNum[[i]])
+                del=sprintf("%ddel:%d",relpos+(1:nchar(refbase))-1,qualNum[[i]])
               )
-            }))
+            })))
             paste(muts,collapse=";")
           } else "="
         })

@@ -213,7 +213,7 @@ function removeBarcode() {
   #remove BARCODES
   FBODY2=$(echo $FBODY|sed -r "s/${BARCODE}//g")
   #write to output file
-  OUTFASTA=$(echo $INFASTA|sed -r "s/.fa$/_noBC.fa/")
+  OUTFASTA=$(echo $INFASTA|sed -r "s/\\.fa[^.]*$/_noBC.fa/")
   echo $FHEADER>$OUTFASTA
   printf "$FBODY2\n"|fold -w 80 >>$OUTFASTA
   #return the name of the new FASTAFILE
@@ -261,6 +261,7 @@ for INFQ in $INFQS; do
     -c $THREADS -m $(($THREADS*2))G -l "$LOGFILE" -e "${LOGFILE}err" -- \
     scripts/pacRat_worker.sh --barcode $BARCODE --barcodePos $BCPOS \
     --orfStart $ORFSTART --orfEnd $ORFEND -f $MINFREQ -r $MINREADS \
+    --cpus $THREADS \
     "$INFQ" "$REFFASTANOBC" "$WORKSPACE")
   JOBID=${RETVAL##* }
 

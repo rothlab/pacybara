@@ -237,9 +237,9 @@ mkdir -p "$EXTRACTDIR"
 echo "Running alignment..."
 RX='\.fastq\.gz$'
 if [[ "$INFQ" =~ $RX ]]; then
-  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" <(zcat $INFQ) | samtools view -b -o "$ALNFILE" - 
+  bwa mem -t $THREADS -M -L 80 "$REFFASTANOBC" <(zcat $INFQ) | samtools view -b -o "$ALNFILE" - 
 else
-  bwa mem -t $THREADS -C -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
+  bwa mem -t $THREADS -M -L 80 "$REFFASTANOBC" $INFQ | samtools view -b -o "$ALNFILE" - 
 fi
 
 # #generate alignment stats
