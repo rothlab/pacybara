@@ -365,7 +365,7 @@ for rids in preClusters:
       qs2=[varMat[m][j] for m in range(len(muts))]
       jacc,inters,union = calcJaccard(qs1,qs2)
       #if both are WT or thresholds are passed, accept.
-      if union == 0 or (jacc > minJaccard and inters > minMatches):
+      if union == 0 or (jacc > minJaccard and inters >= minMatches):
         addLink(rid1,rid2)
 
 #################
