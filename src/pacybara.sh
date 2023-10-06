@@ -150,16 +150,18 @@ else
   BLARG="--blacklist $BLACKLIST"
 fi
 
+TMPDIR=$(mktemp -d -p ./)
 
 #helper function to extract relevant sections from a parameter file
 extractParamSection() {
   INFILE="$1"
   SECTION="$2"
-  mkdir -p tmp
+  TMPDIR="$3"
+  # mkdir -p tmp
   case "$SECTION" in
-    ARGUMENTS) TMPFILE=$(mktemp -p tmp/);;
-    *SEQUENCE*) TMPFILE=$(mktemp -p tmp/ --suffix=.fasta);;
-    SAMPLE) TMPFILE=$(mktemp -p tmp/ --suffix=.tsv);;
+    ARGUMENTS) TMPFILE=$(mktemp -p "$TMPDIR");;
+    *SEQUENCE*) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.fasta);;
+    SAMPLE) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.tsv);;
     *) die "Unrecognized section selected!";;
   esac
   RANGE=($(grep -n "$SECTION" "$INFILE"|cut -f1 -d:))
@@ -192,7 +194,7 @@ validateFloat() {
 }
 
 #Load and validate parameter sheet
-source $(extractParamSection $PARAMETERS ARGUMENTS)
+source $(extractParamSection "$PARAMETERS" 'ARGUMENTS' "$TMPDIR")
 validateFile $INFASTQ "INFASTQ"
 RX='\.fastq\.gz$'
 if ! [[ "$INFASTQ" =~ $RX ]]; then
@@ -502,5 +504,8 @@ pacybara_qc.R "${CLUSTERDIR}/clusters_transl_softfilter.csv.gz" \
 
 #move and rename the softfilter pdf output
 mv "${CLUSTERDIR}/clusters_transl_softfilter.pdf" "${CLUSTERDIR}/qc/compromisedBC.pdf"
+
+#cleanup temp files
+rm -r "$TMPDIR"
 
 echo "Done!"
