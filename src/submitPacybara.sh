@@ -30,9 +30,9 @@ submitPacybara.sh v0.0.1
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
-A convenient wrapper for Bartender that performs lookups against Pacybara
-libraries and performs downstream analysis
-Usage: submitPacybara.sh [-b|--blacklist <BLACKLIST>] [-c|--conda <ENV>] <PARAMS>
+A convenient job submission script of pacybara
+Usage: submitPacybara.sh [-d|--basedir <DIR>]
+  [-b|--blacklist <BLACKLIST>] [-c|--conda <ENV>] <PARAMS>
 
 <PARAMS>       : A barseq parameter sheet file
 -d|--basedir   : The base directory in which the output directory will be created. Default: $BASEDIR
