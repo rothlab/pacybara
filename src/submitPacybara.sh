@@ -21,6 +21,7 @@
 BASEDIR=~/projects/pacybara/workspace/pacybara
 CONDAENV=pacybara
 CONDAARG="--conda $CONDAENV"
+BLACKLIST=""
 
 #helper function to print usage information
 usage () {
@@ -45,8 +46,6 @@ EOF
 
 #Parse Arguments
 PARAMS=""
-BLACKLIST=""
-CONDAARG=""
 while (( "$#" )); do
   case "$1" in
     -h|--help)
