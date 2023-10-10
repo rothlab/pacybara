@@ -221,7 +221,7 @@ case $CLUSTERMODE in
   virtual);;
   *) die "Cluster mode must be 'uptag','downtag' or 'virtual'";;
 esac
-REFFASTA=$(extractParamSection $PARAMETERS 'AMPLICON SEQUENCE')
+REFFASTA=$(extractParamSection $PARAMETERS 'AMPLICON SEQUENCE' "$TMPDIR")
 
 
 function removeBarcode {
