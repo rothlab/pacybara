@@ -18,8 +18,8 @@
 
 #This script depends on submitjob.sh and waitForJobs.sh !
 
-BASEDIR=~/projects/pacybara/workspace/pacybara
-CONDAENV=pacybara
+BASEDIR=~/projects/pacybara/workspace/
+CONDAENV=py27
 CONDAARG="--conda $CONDAENV"
 BLACKLIST=""
 
@@ -27,11 +27,11 @@ BLACKLIST=""
 usage () {
   cat << EOF
 
-submitPacybara.sh v0.0.1 
+submitPacybartender.sh v0.0.1 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
-A convenient job submission script of pacybara
+A convenient job submission script of pacybartender
 Usage: submitPacybara.sh [-d|--basedir <DIR>]
   [-b|--blacklist <BLACKLIST>] [-c|--conda <ENV>] <PARAMS>
 
@@ -110,37 +110,43 @@ else
   BLARG="--blacklist $BLACKLIST"
 fi
 
-#helper function to extract relevant sections from a parameter file
-extractParamSection() {
-  INFILE="$1"
-  SECTION="$2"
-  TMPDIR="$3"
-  # mkdir -p tmp
-  case "$SECTION" in
-    ARGUMENTS) TMPFILE=$(mktemp -p "$TMPDIR");;
-    *SEQUENCE*) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.fasta);;
-    SAMPLE) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.tsv);;
-    *) die "Unrecognized section selected!";;
-  esac
-  RANGE=($(grep -n "$SECTION" "$INFILE"|cut -f1 -d:))
-  sed -n "$((${RANGE[0]}+1)),$((${RANGE[1]}-1))p;$((${RANGE[1]}))q" "$INFILE">"$TMPFILE"
-  echo "$TMPFILE"
-}
+# #helper function to extract relevant sections from a parameter file
+# extractParamSection() {
+#   INFILE="$1"
+#   SECTION="$2"
+#   TMPDIR="$3"
+#   # mkdir -p tmp
+#   case "$SECTION" in
+#     ARGUMENTS) TMPFILE=$(mktemp -p "$TMPDIR");;
+#     *SEQUENCE*) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.fasta);;
+#     SAMPLE) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.tsv);;
+#     *) die "Unrecognized section selected!";;
+#   esac
+#   RANGE=($(grep -n "$SECTION" "$INFILE"|cut -f1 -d:))
+#   sed -n "$((${RANGE[0]}+1)),$((${RANGE[1]}-1))p;$((${RANGE[1]}))q" "$INFILE">"$TMPFILE"
+#   echo "$TMPFILE"
+# }
 
-#load environment variables from parameter sheet
-TMPDIR=$(mktemp -d -p ./)
-source $(extractParamSection "$PARAMETERS" 'ARGUMENTS' "$TMPDIR")
-rm -r "$TMPDIR"
+# #load environment variables from parameter sheet
+# TMPDIR=$(mktemp -d -p ./)
+# source $(extractParamSection "$PARAMETERS" 'ARGUMENTS' "$TMPDIR")
+# rm -r "$TMPDIR"
+
+#Load FASTQDIR parameter
+source <(grep "FASTQDIR=" 20231010_param_LDLR_R01_up.txt)
+FASTQDIR=$(realpath "$FASTQDIR")
+
+#Load TITLE
+source <(grep "TITLE=" 20231010_param_LDLR_R01_up.txt)
+TAG=${TITLE}_$(date +%Y%m%d_%H%M%S)
 
 echo "Submitting job..."
 
-mkdir -p "$WORKSPACE"
-cd "$WORKSPACE"
-submitjob.sh -n pacybara -c 12 -m 24G -t 7-00:00:00 \
-	-l pacybara.log -e pacybara.log \
-	-q guru $CONDAARG $BLARG -- \
-	pacybara.sh $BLARG "$PARAMETERS"
+cd "$BASEDIR"
+submitjob.sh -n PTMbartender -c 12 -m 24G -t 7-00:00:00 \
+  -l ${TAG}.log -e ${TAG}.log $BLARG -- \
+  pacybartender.sh $CONDAARG $BLARG "$FASTQDIR" "$PARAMETERS"
 
-echo "Logfile: ${WORKSPACE}/pacybara.log"
+echo "Logfile: ${BASEDIR}/${TAG}.log"
 
 echo "Done!"
