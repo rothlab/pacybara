@@ -470,7 +470,7 @@ pacybara_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
 zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
   |uniq -c>"${CLUSTERDIR}/qc/edDistr.txt"
 
-if [[ "$CLUSTERMODE" == "DOWNTAG" ]]; then
+if [[ "$CLUSTERMODE" == "downtag" ]]; then
   TAGFILE="${EXTRACTDIR}/bcExtract_2.fastq.gz"
 else
   TAGFILE="${EXTRACTDIR}/bcExtract_1.fastq.gz"
