@@ -133,11 +133,11 @@ fi
 # rm -r "$TMPDIR"
 
 #Load FASTQDIR parameter
-source <(grep "FASTQDIR=" 20231010_param_LDLR_R01_up.txt)
+source <(grep "FASTQDIR=" "$PARAMETERS")
 FASTQDIR=$(realpath "$FASTQDIR")
 
 #Load TITLE
-source <(grep "TITLE=" 20231010_param_LDLR_R01_up.txt)
+source <(grep "TITLE=" "$PARAMETERS")
 TAG=${TITLE}_$(date +%Y%m%d_%H%M%S)
 
 echo "Submitting job..."
