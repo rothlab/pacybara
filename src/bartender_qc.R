@@ -35,7 +35,7 @@ p <- add_argument(p, "--freqFilter", help="frequency filter cutoff",default=5e-7
 p <- add_argument(p, "--bnFilter", help="bottleneck filter count cutoff",default=-Inf)
 pargs <- parse_args(p)
 
-# pargs <- list(lrs="scores/allLRs.csv",counts="counts/allCounts.csv",samples="samples.txt",outdir="qc/",freqFilter=5e-7,bnFilter=-Inf)
+# pargs <- list(lrs="scores/allLRs.csv",counts="counts/allCounts.csv",samples="samples.txt",outdir="qc/",logfolder="logs/",freqFilter=5e-7,bnFilter=-Inf)
 
 dir.create(pargs$outdir,recursive=TRUE)
 
@@ -120,7 +120,7 @@ logsBySample <- sapply(samples$sample, function(sname) {
   list.files(pargs$logfolder,pattern=sname,full.name=TRUE)
 })
 extractStats <- yogitools::as.df(lapply(logsBySample, function(lfile) {
-  lines <- readLines(lfile, 3L)
+  lines <- readLines(lfile, 6L)[4:6]
   yogitools::extract.groups(lines,"there are (\\d+) ")[,1] |> 
     as.integer()|>setNames(c("total","extract","passfilter"))
 }))
