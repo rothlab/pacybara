@@ -477,7 +477,7 @@ else
 fi
 # #perform actual clustering and form consensus
 echo "Starting clustering method..."
-pacybara_cluster.py \
+python3 -u $(command -v pacybara_cluster.py) \
   --uptagBarcodeFile "$TAGFILE" \
   --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \
   --minMatches "$MINMATCHES" --maxDiff "$MAXDIFF" --minQual "$MINQUAL" \
