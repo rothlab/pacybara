@@ -261,6 +261,7 @@ while ! [[ -z $FAILEDCHUNKS ]]; do
     ((TRIES++))
   else
     echo "ERROR: Exhausted 3 attempts at re-running failed jobs!">&2
+    echo "$FAILEDCHUNKS"
     exit 1
   fi
 done

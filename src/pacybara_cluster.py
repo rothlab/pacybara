@@ -74,9 +74,10 @@ except getopt.GetoptError as err:
   usageAndDie(err)
 
 #define default options
-# edFile = "m64308e_221221_185214_LDLR_R03.subreads.deep_clustering/editDistance.csv.gz"
-# genoFile = "m64308e_221221_185214_LDLR_R03.subreads.deep_extract/genoExtract.csv.gz"
-# preClustFile = "m64308e_221221_185214_LDLR_R03.subreads.deep_clustering/bcPreclust.fastq.gz"
+# edFile = "./editDistance.csv.gz"
+# genoFile = "../LDLR_R03_UWTCAG2023_merged_extract/genoExtract.csv.gz"
+# preClustFile = "./bcPreclust.fastq.gz"
+# uptagFile="../LDLR_R03_UWTCAG2023_merged_extract/bcExtract_1.fastq.gz"
 uptagFile=None
 minJaccard=0.2
 minMatches=1
@@ -161,6 +162,17 @@ def markAsKnown(rid1,rid2):
 def isKnown(rid1,rid2):
   return (makePID(rid1,rid2) in knownRIDPairs)
 
+#helper/debug function to calculate a contingency table for hashmap contents
+def contab(coll):
+  counts={}
+  for l in [len(x) for x in coll.values()]:
+    if l in counts:
+      counts[l]=counts[l]+1
+    else:
+      counts[l]=1
+  return counts
+
+
 #declare/initialize hashmap
 #rid : "read ID"
 #cid : "cluster ID"
@@ -184,8 +196,8 @@ def addLink(rid1,rid2):
         cid2 = rid2cid[rid2]
         #change cid associations for all members of second cluster to first
         for ridi in cid2rids[cid2]:
-          rid2cid[ridi] = cid1 
-          cid2rids[cid1].append(ridi)
+          rid2cid[ridi] = cid1
+        cid2rids[cid1].extend(cid2rids[cid2])
         #delete old cid entry for second cluster
         del cid2rids[cid2]
     else:
@@ -220,7 +232,8 @@ def getReadsForCluster(cid):
 #this is a list of dictionaries (for fast searching)
 # the list index corresponds to edit distance
 # dictionaries link pair IDs to pairs of read IDs
-edistPairs = [{} for i in range(maxDiff+1)]
+edistPairs = [{} for i in range(maxDiff*2+1)]
+edistLookup = {}
 rid2bc = {}
 rid2geno = {}
 rid2uptag = {}
@@ -235,6 +248,7 @@ preSingles = []
 log("Loading data...")
 
 #process edit distance file
+log(" - Loading edit distances")
 with gzip.open(edFile,"rb") as stream:
   #skip first line
   header=stream.readline()
@@ -244,11 +258,15 @@ with gzip.open(edFile,"rb") as stream:
     rids1=fields[0].strip('\"').split("|")
     rids2 = fields[1].strip('\"').split("|")
     ed = int(fields[4])
-    for rid1 in rids1:
-      for rid2 in rids2:
-        edistPairs[ed][makePID(rid1,rid2)]=(rid1,rid2)
+    if ed <= maxDiff*2:
+      for rid1 in rids1:
+        for rid2 in rids2:
+          pid=makePID(rid1,rid2)
+          edistPairs[ed][pid]=(rid1,rid2)
+          edistLookup[pid]=ed
 
 #process preclust file
+log(" - Loading barcode groups")
 with gzip.open(preClustFile,"rb") as stream:
   lcount=0
   rids=""
@@ -271,13 +289,16 @@ with gzip.open(preClustFile,"rb") as stream:
       if len(rids) > 1:
         ridpairs = [(a, b) for i, a in enumerate(rids) for b in rids[i + 1:]]
         for rid1, rid2 in ridpairs:
-          edistPairs[0][makePID(rid1,rid2)]=(rid1,rid2)
+          pid=makePID(rid1,rid2)
+          edistPairs[0][pid]=(rid1,rid2)
+          edistLookup[pid]=0
     #check if the line contains the sequence
     elif lcount==2 and rids!="":
       for rid in rids:
         rid2bc[rid]=line
 
 #process genotypes file
+log(" - Loading genotypes")
 with gzip.open(genoFile,"rb") as stream:
   for line in stream:
     line = line.decode().rstrip()
@@ -293,6 +314,7 @@ with gzip.open(genoFile,"rb") as stream:
 
 #process uptag file
 if not uptagFile is None:
+  log(" - Loading tag barcodes")
   with gzip.open(uptagFile,"rb") as stream:
     lcount=0
     rid=""
@@ -345,11 +367,19 @@ def calcJaccard(qs1,qs2):
   return jaccard, inters, union
 
 
+progress = 0
+def trackProgress(maxProgress):
+  global progress
+  progress=progress+1
+  if (progress%1000 == 0):
+    percent=100*progress/maxProgress
+    print("\r  -- Processed %d (=%.02f%%)  "%(progress,percent), end='')
+
 ##################
 # SEED CLUSTERING
 ##################
 
-log("Performing seed clustering...")
+log("Performing seed clustering...\n")
 
 #iterate over pairs at edit distance 0
 for rids in preClusters:
@@ -365,20 +395,25 @@ for rids in preClusters:
       qs2=[varMat[m][j] for m in range(len(muts))]
       jacc,inters,union = calcJaccard(qs1,qs2)
       #if both are WT or thresholds are passed, accept.
-      if union == 0 or (jacc > minJaccard and inters > minMatches):
+      if union == 0 or (jacc > minJaccard and inters >= minMatches):
         addLink(rid1,rid2)
+  trackProgress(len(preClusters))
 
 #################
 # MAIN CLUSTERING
 #################
 
-log("Performing main clustering...")
+log("\nPerforming main clustering...")
 
 for ed in range(1,maxDiff+1):
-  log("Processing edit distance %d"%ed)
+  log(" - Processing edit distance %d\n"%ed)
+  progress = 0
+  maxProgress = len(edistPairs[ed])
+  print("")#empty line for the progress update
   for pairID in edistPairs[ed].keys():
     #if the pair is already known, we're done
     if pairID in knownRIDPairs:
+      trackProgress(maxProgress)
       continue
     rid1,rid2 = pairID.split("-")
     markAsKnown(rid1,rid2)
@@ -387,6 +422,7 @@ for ed in range(1,maxDiff+1):
     cid2 = getClusterForRead(rid2)
     #if they're already clustered together, we're done
     if (not cid1 is None and cid1 == cid2):
+      trackProgress(maxProgress)
       continue
     #get the members of the cluster
     cluster1 = getReadsForCluster(cid1)
@@ -400,6 +436,12 @@ for ed in range(1,maxDiff+1):
     #if the sizes are not sufficiantly different, we're done
     # if sizeDispro < 2**(ed-3):
     if sizeDispro < ed:
+      trackProgress(maxProgress)
+      continue
+    #check if transitive edit distance is only 2 links away (i.e. current edit distance*2)
+    maxED=max([max([edistLookup.get(makePID(ridi,ridj),math.inf) for ridj in cluster2]) for ridi in cluster1])
+    if maxED > 2*ed:
+      trackProgress(maxProgress)
       continue
     #otherwise check jaccard as before.
     muts,varMat = varMatrix(cluster1+cluster2)
@@ -409,6 +451,8 @@ for ed in range(1,maxDiff+1):
     jacc,inters,union = calcJaccard(qs1,qs2)
     if union == 0 or jacc > minJaccard:
       addLink(rid1,rid2)
+      print("Linked at maxED %d"%maxED)
+    trackProgress(maxProgress)
 
 
 ##########################
@@ -418,6 +462,8 @@ for ed in range(1,maxDiff+1):
 log("Forming consensus genotypes...")
 
 finalGenos = {}
+progress=0
+maxProgress=len(cid2rids)
 for cid,rids in cid2rids.items():
   muts,varMat = varMatrix(rids,-minQual)
   #make final variant calls
@@ -428,6 +474,7 @@ for cid,rids in cid2rids.items():
     #sort by nucleotide position
     mutCall = sorted(mutCall,key=lambda s:int(re.sub("\\D+","",s)))
     finalGenos[cid] = ";".join(mutCall)
+  trackProgress(maxProgress)
 
 
 #########################
@@ -467,6 +514,7 @@ log("Forming consensus barcodes...")
 
 def calcConsensusBC(rid2bc):
   consBCs = {}
+  maxProgress=len(cid2rids)
   for cid, rids in cid2rids.items():
     bcs = [rid2bc[rid] for rid in rids]
     counts = collections.Counter(bcs)
@@ -480,9 +528,12 @@ def calcConsensusBC(rid2bc):
       consBCs[cid]=bcs[0]
     else:
       consBCs[cid]=alignmentConsensus(bcs)
+    trackProgress(maxProgress)
   return consBCs
 
+progress=0
 finalBCs = calcConsensusBC(rid2bc)
+progress=0
 finalUptags = calcConsensusBC(rid2uptag) if len(rid2uptag) > 0 else finalBCs
 
 ################

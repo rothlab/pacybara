@@ -15,6 +15,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with Pacybara.  If not, see <https://www.gnu.org/licenses/>.
+set -euo pipefail +H
 
 #helper function to print usage information
 DIRECTION=f
@@ -131,23 +132,29 @@ done
 #reset command arguments as only positional parameters
 eval set -- "$PARAMS"
 
+echo "Running on $HOSTNAME"
+
 FQGZ=$1
 #prefix for intermediate and output files
 PREFIX=${WORKSPACE}/$(basename ${FQGZ%.fastq.gz})
 
 #unfortunately bartender can't deal with the <(gzip -dc $FQGZ) file handle
 #so we'll have to extract the gz file first for bartender to be able to use it
+echo "Decompressing FASTQ"
 FQ=$(mktemp --suffix=.fq)
 gzip -dc $FQGZ>$FQ
 #extract barcodes
+echo "Running bartender_extractor"
 bartender_extractor_com -f $FQ -o "$PREFIX" \
     -q $QUALITY -p "${PATTERN}" -m $MAXERR -d $DIRECTION
 rm $FQ
 
 #run clustering
+echo "Running bartender_single"
 bartender_single_com -f ${PREFIX}_barcode.txt -o ${PREFIX} \
     -d $MAXERR -t $THREADS
 
+echo "Archiving results"
 #compress intermediate results
 gzip "${PREFIX}_barcode."*
 # gzip ${PREFIX}_barcode.csv

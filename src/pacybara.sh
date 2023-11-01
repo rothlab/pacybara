@@ -150,16 +150,18 @@ else
   BLARG="--blacklist $BLACKLIST"
 fi
 
+TMPDIR=$(mktemp -d -p ./)
 
 #helper function to extract relevant sections from a parameter file
 extractParamSection() {
   INFILE="$1"
   SECTION="$2"
-  mkdir -p tmp
+  TMPDIR="$3"
+  # mkdir -p tmp
   case "$SECTION" in
-    ARGUMENTS) TMPFILE=$(mktemp -p tmp/);;
-    *SEQUENCE*) TMPFILE=$(mktemp -p tmp/ --suffix=.fasta);;
-    SAMPLE) TMPFILE=$(mktemp -p tmp/ --suffix=.tsv);;
+    ARGUMENTS) TMPFILE=$(mktemp -p "$TMPDIR");;
+    *SEQUENCE*) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.fasta);;
+    SAMPLE) TMPFILE=$(mktemp -p "$TMPDIR" --suffix=.tsv);;
     *) die "Unrecognized section selected!";;
   esac
   RANGE=($(grep -n "$SECTION" "$INFILE"|cut -f1 -d:))
@@ -192,7 +194,7 @@ validateFloat() {
 }
 
 #Load and validate parameter sheet
-source $(extractParamSection $PARAMETERS ARGUMENTS)
+source $(extractParamSection "$PARAMETERS" 'ARGUMENTS' "$TMPDIR")
 validateFile $INFASTQ "INFASTQ"
 RX='\.fastq\.gz$'
 if ! [[ "$INFASTQ" =~ $RX ]]; then
@@ -219,7 +221,7 @@ case $CLUSTERMODE in
   virtual);;
   *) die "Cluster mode must be 'uptag','downtag' or 'virtual'";;
 esac
-REFFASTA=$(extractParamSection $PARAMETERS 'AMPLICON SEQUENCE')
+REFFASTA=$(extractParamSection $PARAMETERS 'AMPLICON SEQUENCE' "$TMPDIR")
 
 
 function removeBarcode {
@@ -468,14 +470,14 @@ pacybara_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
 zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
   |uniq -c>"${CLUSTERDIR}/qc/edDistr.txt"
 
-if [[ "$CLUSTERMODE" == "DOWNTAG" ]]; then
+if [[ "$CLUSTERMODE" == "downtag" ]]; then
   TAGFILE="${EXTRACTDIR}/bcExtract_2.fastq.gz"
 else
   TAGFILE="${EXTRACTDIR}/bcExtract_1.fastq.gz"
 fi
 # #perform actual clustering and form consensus
 echo "Starting clustering method..."
-pacybara_cluster.py \
+python3 -u $(command -v pacybara_cluster.py) \
   --uptagBarcodeFile "$TAGFILE" \
   --out "${CLUSTERDIR}/clusters.csv.gz" --minJaccard "$MINJACCARD" \
   --minMatches "$MINMATCHES" --maxDiff "$MAXDIFF" --minQual "$MINQUAL" \
@@ -502,5 +504,8 @@ pacybara_qc.R "${CLUSTERDIR}/clusters_transl_softfilter.csv.gz" \
 
 #move and rename the softfilter pdf output
 mv "${CLUSTERDIR}/clusters_transl_softfilter.pdf" "${CLUSTERDIR}/qc/compromisedBC.pdf"
+
+#cleanup temp files
+rm -r "$TMPDIR"
 
 echo "Done!"

@@ -165,6 +165,7 @@ done
 waitForJobs.sh -v "$JOBS"
 
 echo "Translating results to amino acid levels..."
+JOBS=""
 for VARCALL in chunks/chunk*_varcall.txt; do
     ID=$(basename ${VARCALL%_*})
     RETVAL=$(submitjob.sh -t "24:00:00" -n "$ID" -c 8\
@@ -172,6 +173,14 @@ for VARCALL in chunks/chunk*_varcall.txt; do
       --conda "pacybara" --skipValidation $BLARG -- \
       pbVarcall_translate.R "$VARCALL" "$REFSEQ"
     )
+    JOBID=${RETVAL##* }
+    if [ -z "$JOBS" ]; then
+      #if jobs is empty, set it to the new ID
+      JOBS=$JOBID
+    else
+      #otherwise append the id to the list
+      JOBS=${JOBS},$JOBID
+    fi
 done
 waitForJobs.sh -v "$JOBS"
 
