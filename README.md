@@ -46,7 +46,7 @@ pacybara.sh [-c|--cpus <CPUS>] [-q|--queue <QUEUE>] [-b|--blacklist {<NODE>,}] <
 
 If you don't have an HPC environment you can instead try out our experimental single-machine version. However, without the ability to run parallel jobs, this will take a very long time to run (i.e. days or even weeks!).
 
-```pacybara_nomux.sh pacybara_parameters.txt```. 
+```pacybara_simplex.sh pacybara_parameters.txt```. 
 
 ## Pacybara Output
 The output directory will contain multiple items: 
