@@ -4,11 +4,11 @@
 
 #BEGIN ARGUMENTS
 #Experiment title
-TITLE="LDLR-R01-test"
+TITLE="LDLR-Nov23-R01-up"
 # Long read sequencing input file (fastq.gz)
-INFASTQ=/home/rothlab/jweile/data/pacbio_2021-06-09/filterRQ/demux/m54204U_210514_191645.subreads_ccsMerged_RQ999.fastq.gz
+INFASTQ=m54204U_210514_191645.subreads_ccsMerged_RQ999.fastq.gz
 # Workspace directory
-WORKSPACE=/home/rothlab/jweile/projects/barseqPro/workspace/pacybara/LDLR_R01_pDONR_test/
+WORKSPACE=LDLR-Nov23-R01-up/
 # The barcode degeneracy sequence used in the amplicon below
 BARCODE=SWSWSWSWSWSWSWSWSWSWSWSWS
 # The start position of the ORF in the amplicon below (1-based)
@@ -18,15 +18,15 @@ ORFEND=2789
 # The maximum number of low-quality bases allowed in a given barcode.
 MAXQDROPS=5
 # The minimum average quality score allowed in a given barcode.
-MINBCQ=85
+MINBCQ=36
 #The minimum Jaccard coefficient (relative overlap of variants) for a cluster merge
 MINJACCARD=0.2
 #The minimum number of variants two cluster need to have in common to merge
 MINMATCHES=1
 #The maximum number of errors allowed between two barcode reads
-MAXDIFF=2
-#The minimum Q-score for a variant basedall to be considered real based on a single read alone
-MINQUAL=100
+MAXDIFF=1
+#The minimum Q-score for a variant basecall to be considered real based on a single read alone
+MINQUAL=93
 #Cluster based on which barcodes? uptag, downtag, or virtual
 CLUSTERMODE=uptag
 
