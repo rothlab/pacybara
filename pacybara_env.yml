@@ -21,7 +21,7 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - python=3.8
+  - python=3.10
   - r-base>=4.2.2
   - muscle
   - emboss

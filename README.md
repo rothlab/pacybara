@@ -4,7 +4,8 @@ Pacybara is a long-read barcode clustering method designed for multiplexed assay
 
 ## Pre-requisites and installation:
 1. Pacybara is designed for high-performance compute (HPC) clusters running Slurm, PBS, or Univa Grid Engine.
-    * If you do not have access to HPC hardware, you may try the experimental single-instance version of pacybara. However, we strongly recommend using the HPC version to avoid excessively long runtimes.
+    * If you do not have access to an HPC cluster, you can create one in the cloud, e.g. on [AWS](https://aws.amazon.com/blogs/compute/deploying-a-burstable-and-event-driven-hpc-cluster-on-aws-using-slurm-part-1/) or [GoogleCloud](https://cloud.google.com/hpc-toolkit/docs/quickstarts/slurm-cluster).
+    * Alternatively, you may try the experimental single-instance version of pacybara. However, we strongly recommend using the HPC version to avoid excessively long runtimes.
 2. Install [`clusterutil`](https://github.com/jweile/clusterutil). This handles the abstraction between Slurm and PBS interfaces.
 3. Download or clone the code repository:
     * Either via git: `git clone https://github.com/rothlab/pacybara.git`
@@ -44,7 +45,7 @@ pacybara.sh [-c|--cpus <CPUS>] [-q|--queue <QUEUE>] [-b|--blacklist {<NODE>,}] <
 <PARAMETERS>   : The parameter sheet file
 ```
 
-If you don't have an HPC environment you can instead try out our experimental single-machine version. However, without the ability to run parallel jobs, this will take a very long time to run (i.e. days or even weeks!).
+If you don't have access to an HPC environment you can instead try out our experimental single-machine version. However, without the ability to run parallel jobs, this will take a very long time to run (i.e. days or even weeks!).
 
 ```pacybara_simplex.sh pacybara_parameters.txt```. 
 
