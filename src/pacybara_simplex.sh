@@ -21,7 +21,13 @@ set -euo pipefail +H
 
 VERSION=0.1.0
 
-THREADS=4
+#decide on a sensible default value for the number of CPU cores to use
+NPROC_OUT=$(nproc)
+if (( NPROC_OUT < 4 )); then
+  THREADS=1
+else 
+  THREADS=$((NPROC_OUT-2))
+fi
 
 die() {
   if [[ -n $1 ]]; then
@@ -35,7 +41,7 @@ die() {
 usage () {
   cat << EOF
 
-pacybara_nomux.sh v$VERSION 
+pacybara_simplex.sh v$VERSION 
 
 by Jochen Weile <jochenweile@gmail.com> 2021
 
@@ -253,9 +259,13 @@ mkdir -p "$WORKSPACE"
 #define intermediate files
 OUTPREFIX=$(basename ${INFASTQ%.fastq.gz})
 
+echo "Decompressing fastq.gz file ..."
+
 #UNZIP INPUT FASTQ FILE
 INFQEXTRACT="${WORKSPACE}/${OUTPREFIX}.fastq"
 gzip -cd $INFASTQ>$INFQEXTRACT
+
+echo "Running worker"
 
 #RUN WORKER ON EXTRACTED FILE
 pacybara_worker.sh --barcode $BARCODE --barcodePos "$BCPOS" \

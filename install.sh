@@ -22,6 +22,15 @@ PREFIX="${HOME}/bin/"
 #fail on error, even within pipes; disallow use of unset variables, enable history tracking
 set -euo pipefail +H
 
+die () {
+  printf "\n\033[0;31mERROR: %s\033[0m\n" "$*" >&2
+  exit 1
+}
+
+warn () {
+  printf "\n\033[1;33mWARNING: %s\033[0m\n" "$*"
+}
+
 #helper function to print usage information
 usage () {
   cat << EOF
@@ -110,65 +119,71 @@ checkPath() {
 #helper function to check if user wants to proceed with installation.
 checkProceed() {
   sleep 1
-  printf "\nAre you sure you want to proceed anyway? [y/n]: "
+  printf "\nProceed anyway? [y/n]: "
   read -r ANSWER
   if ! [[ $ANSWER == "y" || $ANSWER == "yes" ]]; then
+    echo "Installation aborted."
     exit 1
   fi
 }
 
+if ! [[ -e $PREFIX ]]; then 
+  printf "\nThe installation directory ${PREFIX} does not exist. Do you want to create it? [y/n]"
+  read ANSWER
+  if [[ $ANSWER == "y" || $ANSWER == "yes" ]]; then
+    mkdir -p "$PREFIX"
+  else
+    echo "Installation aborted."
+    exit 1
+  fi
+fi
+
 #Check that PREFIX is writable and listed in PATH
 if ! [[ -w $PREFIX ]]; then
-  printf "\033[0;31mERROR: You don't have permissions to write to your chosen installation directory (${PREFIX}).
+  die "You don't have permission to write to your chosen installation directory (${PREFIX}).
 
-Please use the --PREFIX option to choose a more appropriate target directory. \033[0m\n">&2
-
-  exit 1
+Please use the --PREFIX option to choose a more appropriate target directory."
 
 elif ! [[ $PATH == *${PREFIX%/}* ]]; then 
-
-  printf "\033[1;33mWARNING: Your chosen installation directory (${PREFIX}) is not listed in your \$PATH variable, which means that your command shell would be unable to find it there.
+  warn "Your chosen installation directory (${PREFIX}) is not listed in your \$PATH variable, which means that your command shell will be unable to find the executable there.
 
 Please use the --PREFIX option to choose a more appropriate target directory. For example, here are some writable locations listed in your \$PATH that could work: $(checkPath)
 
-Alternatively, you could add $PREFIX to your \$PATH definition in your .bashrc file.\033[0m\n"
+Alternatively, you could add $PREFIX to your \$PATH definition in your .bashrc file."
   checkProceed
 fi
 
 #Check for the presence of clusterutil
 if [[ -z $(command -v "waitForJobs.sh") ]] ; then
-  printf "\033[1;33mWARNING: clusterutil does not appear to be installed!
-You will not be able to use HPC multiplexing without it.\033[0m\n"
+  warn "clusterutil does not appear to be installed! You will not be able to use HPC multiplexing without it."
   checkProceed
 fi
-#check whether conda, mamba or micromamba are installed
-if [[ -n $(command -v conda) ]]; then
-  CONDAMGR=conda
-elif [[ -n $(command -v mamba) ]]; then
-  CONDAMGR=mamba
-elif [[ -n $(command -v micromamba) ]]; then
-  CONDAMGR=micromamba
-elif [[ -n "$CONDAENV" ]]; then
-  printf "\033[0;31mERROR: No conda installation was found!\033[0m\n">&2
-  exit 1
-fi
-#check that we're in the conda base environment
-if ! [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
-  printf "\033[0;31mERROR: You must run this installer from your conda 'base' environment!\033[0m\n">&2
-  exit 1
-fi
-
 #install conda environment
 if [[ $CONDA == 1 ]]; then
-  #Check for presence of conda
-  if [[ -z $(command -v "conda") ]] ; then
-    printf "\033[0;31mERROR: conda is not installed! Unable to proceed!
-Please either install anaconda/miniconda or use the --skipCondaEnv argument.\033[0m\n">&2
-    exit 1
+
+  #check whether conda, mamba or micromamba are installed
+  if [[ -n $(command -v conda) ]]; then
+    CONDAMGR=conda
+  elif [[ -n $(command -v mamba) ]]; then
+    CONDAMGR=mamba
+  elif [[ -n $(command -v micromamba) ]]; then
+    CONDAMGR=micromamba
+  else 
+    die "conda is not installed!
+
+Please install either anaconda, miniconda or micromamba.
+
+Or, for manual installation, use the --skipCondaEnv argument."
   fi
+  #check that we're in the conda base environment
+  if ! [[ -z $CONDA_DEFAULT_ENV || $CONDA_DEFAULT_ENV == "base" ]]; then
+    die "You must run this installer from your conda 'base' environment!
+
+Or, for manual installation, use the --skipCondaEnv argument."
+  fi
+
   if ${CONDAMGR} env list|grep -q pacybara; then
-    printf "\033[1;33mWARNING: Conda environment 'pacybara' already exists. Skipping conda setup.\033[0m\n">&2
-    sleep 1
+    warn "Conda environment 'pacybara' already exists. Skipping conda setup."
   else
     ${CONDAMGR} env create -f pacybara_env.yml
   fi
@@ -183,14 +198,12 @@ if [[ $DEPENDENCIES == 1 ]]; then
       source "$CONDA_PREFIX/etc/profile.d/${CONDAMGR}.sh"
       ${CONDAMGR} activate pacybara
     else 
-      printf "\033[0;31mERROR: The pacybara conda environment could not be found!\033[0m\n">&2
-      exit 1
+      die "The pacybara conda environment could not be found"
     fi
   #otherwise we install it into the default R installation.
   elif [[ -z $(command -v Rscript) ]] ; then
-    printf "\033[0;31mERROR: Conda setup was skipped, but no R installation was found in the conda environment!
-If you really want to skip the conda setup, please manually install all dependencies first.\033[0m\n">&2
-    exit 1
+    die "Conda setup was skipped, but no R installation was found in the conda environment!
+If you really want to skip the conda setup, please manually install all dependencies first."
   fi
   #install required R packages
   Rscript -e '

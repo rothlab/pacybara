@@ -464,7 +464,7 @@ rm -r "${CLUSTERDIR}/db"
 #calculate edit distance
 echo "Calculating barcode edit distances..."
 pacybara_calcEdits.R "${CLUSTERDIR}/bcMatches.sam.gz" \
-  "${CLUSTERDIR}/bcPreclust.fastq.gz" --maxErr "$MAXDIFF" \
+  "${CLUSTERDIR}/bcPreclust.fastq.gz" --maxErr "$((MAXDIFF*2))" \
   --output "${CLUSTERDIR}/editDistance.csv.gz"
 
 zcat "${CLUSTERDIR}/editDistance.csv.gz"|tail -n +2|cut -f5,5 -d,|sort -n\
